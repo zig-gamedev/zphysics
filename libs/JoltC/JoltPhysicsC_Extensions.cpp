@@ -163,6 +163,7 @@ ENSURE_SIZE_ALIGN(JPH::RMat44, JPC_RMatrix)
 
 ENSURE_SIZE_ALIGN(JPH::Shape::SupportingFace, JPC_Shape_SupportingFace)
 ENSURE_SIZE_ALIGN(JPH::CharacterVirtual::ExtendedUpdateSettings, JPC_CharacterVirtual_ExtendedUpdateSettings)
+ENSURE_SIZE_ALIGN(JPH::RMat44, JPC_RMatrix)
 
 //--------------------------------------------------------------------------------------------------
 #define ENSURE_ENUM_EQ(c_const, cpp_enum) static_assert(c_const == static_cast<int>(cpp_enum))
