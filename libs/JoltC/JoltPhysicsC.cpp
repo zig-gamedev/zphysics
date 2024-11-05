@@ -68,7 +68,9 @@ FN(toJph)(const JPC_Body *in) { assert(in); return reinterpret_cast<const JPH::B
 FN(toJpc)(JPH::Body *in) { assert(in); return reinterpret_cast<JPC_Body *>(in); }
 FN(toJph)(JPC_Body *in) { assert(in); return reinterpret_cast<JPH::Body *>(in); }
 
+FN(toJph)(JPC_PhysicsMaterial *in) { return reinterpret_cast<JPH::PhysicsMaterial *>(in); }
 FN(toJph)(const JPC_PhysicsMaterial *in) { return reinterpret_cast<const JPH::PhysicsMaterial *>(in); }
+FN(toJpc)(JPH::PhysicsMaterial *in) { return reinterpret_cast<JPC_PhysicsMaterial *>(in); }
 FN(toJpc)(const JPH::PhysicsMaterial *in) { return reinterpret_cast<const JPC_PhysicsMaterial *>(in); }
 
 FN(toJph)(const JPC_ShapeSettings *in) {
@@ -231,6 +233,36 @@ FN(toJph)(JPC_ConvexHullShape *in) { assert(in); return reinterpret_cast<JPH::Co
 FN(toJph)(const JPC_ConvexHullShape *in) { assert(in); return reinterpret_cast<const JPH::ConvexHullShape *>(in); }
 FN(toJpc)(JPH::ConvexHullShape *in) { assert(in); return reinterpret_cast<JPC_ConvexHullShape *>(in); }
 FN(toJpc)(const JPH::ConvexHullShape *in) { assert(in); return reinterpret_cast<const JPC_ConvexHullShape *>(in); }
+
+FN(toJph)(JPC_DecoratedShape *in) { assert(in); return reinterpret_cast<JPH::DecoratedShape *>(in); }
+FN(toJph)(const JPC_DecoratedShape *in) { assert(in); return reinterpret_cast<const JPH::DecoratedShape *>(in); }
+FN(toJpc)(JPH::DecoratedShape *in) { assert(in); return reinterpret_cast<JPC_DecoratedShape *>(in); }
+FN(toJpc)(const JPH::DecoratedShape *in) { assert(in); return reinterpret_cast<const JPC_DecoratedShape *>(in); }
+
+FN(toJph)(JPC_RotatedTranslatedShape *in) { assert(in); return reinterpret_cast<JPH::RotatedTranslatedShape *>(in); }
+FN(toJph)(const JPC_RotatedTranslatedShape *in) { assert(in); return reinterpret_cast<const JPH::RotatedTranslatedShape *>(in); }
+FN(toJpc)(JPH::RotatedTranslatedShape *in) { assert(in); return reinterpret_cast<JPC_RotatedTranslatedShape *>(in); }
+FN(toJpc)(const JPH::RotatedTranslatedShape *in) { assert(in); return reinterpret_cast<const JPC_RotatedTranslatedShape *>(in); }
+
+FN(toJph)(JPC_ShapeToIDMap *in) { assert(in); return reinterpret_cast<JPH::Shape::ShapeToIDMap *>(in); }
+FN(toJph)(const JPC_ShapeToIDMap *in) { assert(in); return reinterpret_cast<const JPH::Shape::ShapeToIDMap *>(in); }
+FN(toJpc)(JPH::Shape::ShapeToIDMap *in) { assert(in); return reinterpret_cast<JPC_ShapeToIDMap *>(in); }
+FN(toJpc)(const JPH::Shape::ShapeToIDMap *in) { assert(in); return reinterpret_cast<const JPC_ShapeToIDMap *>(in); }
+
+FN(toJph)(JPC_MaterialToIDMap *in) { assert(in); return reinterpret_cast<JPH::Shape::MaterialToIDMap *>(in); }
+FN(toJph)(const JPC_MaterialToIDMap *in) { assert(in); return reinterpret_cast<const JPH::Shape::MaterialToIDMap *>(in); }
+FN(toJpc)(JPH::Shape::MaterialToIDMap *in) { assert(in); return reinterpret_cast<JPC_MaterialToIDMap *>(in); }
+FN(toJpc)(const JPH::Shape::MaterialToIDMap *in) { assert(in); return reinterpret_cast<const JPC_MaterialToIDMap *>(in); }
+
+FN(toJph)(JPC_IDToShapeMap *in) { assert(in); return reinterpret_cast<JPH::Shape::IDToShapeMap *>(in); }
+FN(toJph)(const JPC_IDToShapeMap *in) { assert(in); return reinterpret_cast<const JPH::Shape::IDToShapeMap *>(in); }
+FN(toJpc)(JPH::Shape::IDToShapeMap *in) { assert(in); return reinterpret_cast<JPC_IDToShapeMap *>(in); }
+FN(toJpc)(const JPH::Shape::IDToShapeMap *in) { assert(in); return reinterpret_cast<const JPC_IDToShapeMap *>(in); }
+
+FN(toJph)(JPC_IDToMaterialMap *in) { assert(in); return reinterpret_cast<JPH::Shape::IDToMaterialMap *>(in); }
+FN(toJph)(const JPC_IDToMaterialMap *in) { assert(in); return reinterpret_cast<const JPH::Shape::IDToMaterialMap *>(in); }
+FN(toJpc)(JPH::Shape::IDToMaterialMap *in) { assert(in); return reinterpret_cast<JPC_IDToMaterialMap *>(in); }
+FN(toJpc)(const JPH::Shape::IDToMaterialMap *in) { assert(in); return reinterpret_cast<const JPC_IDToMaterialMap *>(in); }
 
 FN(toJph)(const JPC_ConstraintSettings *in) {
     ENSURE_TYPE(in, JPH::ConstraintSettings);
@@ -1936,6 +1968,168 @@ JPC_Shape_CastRay(const JPC_Shape *in_shape,
     assert(in_shape && in_ray && in_id_creator && io_hit);
     return toJph(in_shape)->CastRay(*toJph(in_ray), *toJph(in_id_creator), *toJph(io_hit));
 }
+
+JPC_API void
+JPC_Shape_SaveBinaryState(const JPC_Shape *in_shape, void *in_stream_out)
+{
+    assert(in_shape && in_stream_out);
+    return toJph(in_shape)->SaveBinaryState(*static_cast<JPH::StreamOut *>(in_stream_out));
+}
+
+JPC_API void
+JPC_Shape_SaveWithChildren(const JPC_Shape *in_shape, void *in_stream_out, JPC_ShapeToIDMap *io_shape_map, JPC_MaterialToIDMap *io_material_map)
+{
+	assert(in_shape && io_shape_map && io_material_map);
+	return toJph(in_shape)->SaveWithChildren(*static_cast<JPH::StreamOut *>(in_stream_out), *toJph(io_shape_map), *toJph(io_material_map));
+}
+
+JPC_API void
+JPC_Shape_SaveWithChildren_All(const JPC_Shape *in_shape, void *in_stream_out)
+{
+	assert(in_shape);
+	JPH::Shape::ShapeToIDMap tmp_shape_map;
+	JPH::Shape::MaterialToIDMap tmp_material_map;
+	return toJph(in_shape)->SaveWithChildren(*static_cast<JPH::StreamOut *>(in_stream_out), tmp_shape_map, tmp_material_map);
+}
+
+JPC_API JPC_Shape*
+JPC_Shape_sRestoreFromBinaryState(void *in_stream_in)
+{
+	assert(in_stream_in);
+	const JPH::Result result = JPH::Shape::sRestoreFromBinaryState(*static_cast<JPH::StreamIn *>(in_stream_in));
+	if (result.HasError()) return nullptr;
+	JPH::Shape *shape = const_cast<JPH::Shape*>(result.Get().GetPtr());
+	shape->AddRef();
+	return toJpc(shape);
+}
+
+JPC_API JPC_Shape*
+JPC_Shape_sRestoreWithChildren(void *in_stream_in, JPC_IDToShapeMap *io_shape_map, JPC_IDToMaterialMap *io_material_map)
+{
+	assert(in_stream_in && io_shape_map && io_material_map); 
+	const JPH::Result result = JPH::Shape::sRestoreWithChildren(*static_cast<JPH::StreamIn *>(in_stream_in),
+																*toJph(io_shape_map),
+																*toJph(io_material_map));
+
+	if (result.HasError()) return nullptr;
+	JPH::Shape *shape = const_cast<JPH::Shape*>(result.Get().GetPtr());
+	shape->AddRef();
+	return toJpc(shape);
+}
+
+JPC_API JPC_Shape*
+JPC_Shape_sRestoreWithChildren_All(void *in_stream_in)
+{
+	assert(in_stream_in); 
+	JPH::Shape::IDToShapeMap tmp_shape_map;
+	JPH::Shape::IDToMaterialMap tmp_material_map;
+	const JPH::Result result = JPH::Shape::sRestoreWithChildren(*static_cast<JPH::StreamIn *>(in_stream_in),
+																tmp_shape_map,
+																tmp_material_map);
+
+	if (result.HasError()) return nullptr;
+	JPH::Shape *shape = const_cast<JPH::Shape*>(result.Get().GetPtr());
+	shape->AddRef();
+	return toJpc(shape);
+}
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_Shape Serialization Structures
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_ShapeToIDMap *
+JPC_ShapeToIDMap_Create()
+{
+	return toJpc(new JPH::Shape::ShapeToIDMap());
+}
+
+JPC_API void
+JPC_ShapeToIDMap_Add(JPC_ShapeToIDMap *in_map, const JPC_Shape *const *in_shapes, uint32_t in_num_shapes)
+{
+	assert(in_map);
+	JPH::Shape::ShapeToIDMap& map = *toJph(in_map);
+	for (uint32_t i = 0; i < in_num_shapes; ++i)
+	{
+		uint32_t shape_id = (uint32_t)map.size();
+		map[toJph(in_shapes[i])] = shape_id;
+	}
+}
+
+JPC_API void
+JPC_ShapeToIDMap_Destroy(JPC_ShapeToIDMap *in_map)
+{
+	JPH::Free(toJph(in_map));
+}
+
+JPC_API JPC_MaterialToIDMap *
+JPC_MaterialToIDMap_Create()
+{
+	return toJpc(new JPH::Shape::MaterialToIDMap());
+}
+
+JPC_API void
+JPC_MaterialToIDMap_Add(JPC_MaterialToIDMap *in_map, const JPC_PhysicsMaterial *const *in_materials, uint32_t in_num_materials)
+{
+	assert(in_map);
+	JPH::Shape::MaterialToIDMap& map = *toJph(in_map);
+	for (uint32_t i = 0; i < in_num_materials; ++i)
+	{
+		uint32_t material_id = (uint32_t)map.size();
+		map[toJph(in_materials[i])] = material_id;
+	}
+}
+
+JPC_API void
+JPC_MaterialToIDMap_Destroy(JPC_MaterialToIDMap *in_map)
+{
+	JPH::Free(toJph(in_map));
+}
+
+JPC_API JPC_IDToShapeMap*
+JPC_IDToShapeMap_Create()
+{
+	return toJpc(new JPH::Shape::IDToShapeMap());
+}
+
+JPC_API void
+JPC_IDToShapeMap_Add(JPC_IDToShapeMap *in_map, JPC_Shape *const *in_shapes, uint32_t in_num_shapes)
+{
+	assert(in_map);
+	JPH::Shape::IDToShapeMap& map = *toJph(in_map);
+	for (uint32_t i = 0; i < in_num_shapes; ++i)
+	{
+		map.push_back(toJph(in_shapes[i]));
+	}
+}
+
+JPC_API void
+JPC_IDToShapeMap_Destroy(JPC_ShapeToIDMap *in_map)
+{
+	JPH::Free(toJph(in_map));
+}
+
+JPC_API JPC_IDToMaterialMap*
+JPC_IDToMaterialMap_Create()
+{
+	return toJpc(new JPH::Shape::IDToMaterialMap());
+}
+
+JPC_API void
+JPC_IDToMaterialMap_Add(JPC_IDToMaterialMap *in_map, JPC_PhysicsMaterial *const *in_materials, uint32_t in_num_materials)
+{
+	assert(in_map);
+	JPH::Shape::IDToMaterialMap& map = *toJph(in_map);
+	for (uint32_t i = 0; i < in_num_materials; ++i)
+	{
+		map.push_back(toJph(in_materials[i]));
+	}
+}
+
+JPC_API void
+JPC_IDToMaterialMap_Destroy(JPC_ShapeToIDMap *in_map)
+{
+	JPH::Free(toJph(in_map));
+}
 //--------------------------------------------------------------------------------------------------
 //
 // JPC_BoxShape
@@ -1982,6 +2176,32 @@ JPC_ConvexHullShape_GetFaceVertices(const JPC_ConvexHullShape *in_shape,
                                     uint32_t *out_vertices)
 {
     return toJph(in_shape)->GetFaceVertices(in_face_index, in_max_vertices, out_vertices);
+}
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_DecoratedShape
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API const JPC_Shape*
+JPC_DecoratedShape_GetInnerShape(const JPC_DecoratedShape *in_shape)
+{
+	return toJpc(toJph(in_shape)->GetInnerShape());
+}
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_RotatedTranslatedShape
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_RotatedTranslatedShape_GetRotation(const JPC_RotatedTranslatedShape *in_shape, float out_rotation[4])
+{
+    storeVec4(out_rotation, toJph(in_shape)->GetRotation().GetXYZW());
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_RotatedTranslatedShape_GetPosition(const JPC_RotatedTranslatedShape *in_shape, float out_position[3])
+{
+    storeVec3(out_position, toJph(in_shape)->GetPosition());
 }
 //--------------------------------------------------------------------------------------------------
 //

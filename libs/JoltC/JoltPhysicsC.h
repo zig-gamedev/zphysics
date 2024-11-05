@@ -345,9 +345,16 @@ typedef struct JPC_FixedConstraintSettings   JPC_FixedConstraintSettings;
 typedef struct JPC_PhysicsSystem JPC_PhysicsSystem;
 typedef struct JPC_SharedMutex   JPC_SharedMutex;
 
-typedef struct JPC_Shape           JPC_Shape;
-typedef struct JPC_BoxShape        JPC_BoxShape;
-typedef struct JPC_ConvexHullShape JPC_ConvexHullShape;
+typedef struct JPC_Shape                  JPC_Shape;
+typedef struct JPC_BoxShape               JPC_BoxShape;
+typedef struct JPC_ConvexHullShape        JPC_ConvexHullShape;
+typedef struct JPC_DecoratedShape         JPC_DecoratedShape;
+typedef struct JPC_RotatedTranslatedShape JPC_RotatedTranslatedShape;
+
+typedef struct JPC_ShapeToIDMap    JPC_ShapeToIDMap;
+typedef struct JPC_MaterialToIDMap JPC_MaterialToIDMap;
+typedef struct JPC_IDToShapeMap    JPC_IDToShapeMap;
+typedef struct JPC_IDToMaterialMap JPC_IDToMaterialMap;
 
 typedef struct JPC_Constraint       JPC_Constraint;
 typedef struct JPC_PhysicsMaterial  JPC_PhysicsMaterial;
@@ -751,6 +758,36 @@ typedef bool (*JPC_BodyDrawFilterFunc)(const JPC_Body *);
 // Interfaces (virtual tables)
 //
 //--------------------------------------------------------------------------------------------------
+typedef struct JPC_StreamOutVTable
+{
+    _JPC_VTABLE_HEADER;
+
+    // Required, *cannot* be NULL.
+    void
+    (*WriteBytes)(void *in_self, const void *in_data, size_t in_num_bytes);
+	
+    // Required, *cannot* be NULL.
+    bool
+    (*IsFailed)(const void *in_self);
+} JPC_StreamOutVTable;
+
+typedef struct JPC_StreamInVTable
+{
+    _JPC_VTABLE_HEADER;
+
+    // Required, *cannot* be NULL.
+    void
+    (*ReadBytes)(void *in_self, void *out_data, size_t in_num_bytes);
+
+    // Required, *cannot* be NULL.
+    bool
+    (*IsEOF)(const void *in_self);
+	
+    // Required, *cannot* be NULL.
+    bool
+    (*IsFailed)(const void *in_self);
+} JPC_StreamInVTable;
+
 typedef struct JPC_BroadPhaseLayerInterfaceVTable
 {
     _JPC_VTABLE_HEADER;
@@ -1738,6 +1775,69 @@ JPC_Shape_CastRay(const JPC_Shape *in_shape,
                   const JPC_RayCast *in_ray,
                   const JPC_SubShapeIDCreator *in_id_creator,
                   JPC_RayCastResult *io_hit); // *Must* be default initialized (see JPC_RayCastResult)
+
+// `in_stream_out` *must* point to a struct that has JPC_StreamOutVTable as its first member
+JPC_API void
+JPC_Shape_SaveBinaryState(const JPC_Shape *in_shape, void *in_stream_out);
+
+JPC_API void
+JPC_Shape_SaveWithChildren(const JPC_Shape *in_shape, void *in_stream_out, JPC_ShapeToIDMap *io_shape_map, JPC_MaterialToIDMap *io_material_map);
+
+// This version uses temporary maps and thus will save all shape IDs.
+JPC_API void
+JPC_Shape_SaveWithChildren_All(const JPC_Shape *in_shape, void *in_stream_out);
+
+// `in_stream_in` *must *point to a struct that has JPC_StreamInVTable as its first member
+JPC_API JPC_Shape*
+JPC_Shape_sRestoreFromBinaryState(void *in_stream_in); 
+
+// `in_stream_in` *must *point to a struct that has JPC_StreamInVTable as its first member
+JPC_API JPC_Shape*
+JPC_Shape_sRestoreWithChildren(void *in_stream_in, JPC_IDToShapeMap *io_shape_map, JPC_IDToMaterialMap *io_material_map); 
+
+// This version uses temporary reverse mappings and thus will restore all shape IDs.
+JPC_API JPC_Shape*
+JPC_Shape_sRestoreWithChildren_All(void *in_stream_in); 
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_Shape Serialization Structures
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_ShapeToIDMap*
+JPC_ShapeToIDMap_Create();
+
+JPC_API void
+JPC_ShapeToIDMap_Add(JPC_ShapeToIDMap *in_map, const JPC_Shape *const *in_shapes, uint32_t in_num_shapes);
+
+JPC_API void
+JPC_ShapeToIDMap_Destroy(JPC_ShapeToIDMap *in_map);
+
+JPC_API JPC_MaterialToIDMap*
+JPC_MaterialToIDMap_Create();
+
+JPC_API void
+JPC_MaterialToIDMap_Add(JPC_MaterialToIDMap *in_map, const JPC_PhysicsMaterial *const *in_materials, uint32_t in_num_materials);
+
+JPC_API void
+JPC_MaterialToIDMap_Destroy(JPC_MaterialToIDMap *in_map);
+
+JPC_API JPC_IDToShapeMap*
+JPC_IDToShapeMap_Create();
+
+JPC_API void
+JPC_IDToShapeMap_Add(JPC_IDToShapeMap *in_map, JPC_Shape *const *in_shapes, uint32_t in_num_shapes);
+
+JPC_API void
+JPC_IDToShapeMap_Destroy(JPC_ShapeToIDMap *in_map);
+
+JPC_API JPC_IDToMaterialMap*
+JPC_IDToMaterialMap_Create();
+
+JPC_API void
+JPC_IDToMaterialMap_Add(JPC_IDToMaterialMap *in_map, JPC_PhysicsMaterial *const *in_materials, uint32_t in_num_materials);
+
+JPC_API void
+JPC_IDToMaterialMap_Destroy(JPC_IDToMaterialMap *in_map);
 //--------------------------------------------------------------------------------------------------
 //
 // JPC_BoxShape
@@ -1768,6 +1868,23 @@ JPC_ConvexHullShape_GetFaceVertices(const JPC_ConvexHullShape *in_shape,
                                     uint32_t in_face_index,
                                     uint32_t in_max_vertices,
                                     uint32_t *out_vertices);
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_DecoratedShape
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API const JPC_Shape*
+JPC_DecoratedShape_GetInnerShape(const JPC_DecoratedShape *in_shape);
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_RotatedTranslatedShape
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_RotatedTranslatedShape_GetRotation(const JPC_RotatedTranslatedShape *in_shape, float out_rotation[4]);
+
+JPC_API void
+JPC_RotatedTranslatedShape_GetPosition(const JPC_RotatedTranslatedShape *in_shape, float out_position[3]);
 //--------------------------------------------------------------------------------------------------
 //
 // JPC_ConstraintSettings
