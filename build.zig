@@ -54,7 +54,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
         if (target.result.os.tag == .windows) {
-            lib.defineCMacro("JPC_API", "extern __declspec(dllexport)");
+            lib.root_module.addCMacro("JPC_API", "extern __declspec(dllexport)");
         }
         break :blk lib;
     } else b.addStaticLibrary(.{
