@@ -1286,7 +1286,7 @@ pub const DebugRenderer = if (!debug_renderer_enabled) extern struct {} else ext
 
     pub fn Methods(comptime T: type) type {
         return extern struct {
-            pub inline fn drawLine(self: *T, from: *const [3]Real, to: *const [3]Real, color: *const Color) void {
+            pub inline fn drawLine(self: *T, from: *const [3]Real, to: *const [3]Real, color: Color) void {
                 return @as(*const DebugRenderer.VTable(T), @ptrCast(self.__v))
                     .drawLine(
                     @as(*const T, @ptrCast(self)),
@@ -1300,7 +1300,7 @@ pub const DebugRenderer = if (!debug_renderer_enabled) extern struct {} else ext
                 v1: *const [3]Real,
                 v2: *const [3]Real,
                 v3: *const [3]Real,
-                color: *const Color,
+                color: Color,
             ) void {
                 return @as(*const DebugRenderer.VTable(T), @ptrCast(self.__v))
                     .drawTriangle(
@@ -1388,14 +1388,14 @@ pub const DebugRenderer = if (!debug_renderer_enabled) extern struct {} else ext
                 self: *T,
                 from: *const [3]Real,
                 to: *const [3]Real,
-                color: *const Color,
+                color: Color,
             ) callconv(.C) void = null,
             drawTriangle: ?*const fn (
                 self: *T,
                 v1: *const [3]Real,
                 v2: *const [3]Real,
                 v3: *const [3]Real,
-                color: *const Color,
+                color: Color,
             ) callconv(.C) void = null,
             createTriangleBatch: ?*const fn (
                 self: *T,
@@ -4999,7 +4999,7 @@ const test_cb1 = struct {
             self: *MyDebugRenderer,
             from: *const [3]Real,
             to: *const [3]Real,
-            color: *const DebugRenderer.Color,
+            color: DebugRenderer.Color,
         ) callconv(.C) void {
             _ = self;
             _ = from;
@@ -5011,7 +5011,7 @@ const test_cb1 = struct {
             v1: *const [3]Real,
             v2: *const [3]Real,
             v3: *const [3]Real,
-            color: *const DebugRenderer.Color,
+            color: DebugRenderer.Color,
         ) callconv(.C) void {
             _ = self;
             _ = v1;
