@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) void {
             bool,
             "no_exceptions",
             "Disable C++ Exceptions",
-        ) orelse false,
+        ) orelse true,
     };
 
     const options_step = b.addOptions();
