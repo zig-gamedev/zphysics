@@ -1,5 +1,6 @@
 .{
-    .name = "zphysics",
+    .name = .zphysics,
+    .fingerprint = 0x1def6aac00c4909d,
     .version = "0.2.0-dev",
     .paths = .{
         "build.zig",

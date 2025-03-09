@@ -3938,7 +3938,7 @@ fn zphysicsAlloc(size: usize) callconv(.C) ?*anyopaque {
 
     const ptr = state.?.mem_allocator.rawAlloc(
         size,
-        std.math.log2_int(u29, @as(u29, @intCast(mem_alignment))),
+        std.mem.Alignment.fromByteUnits(mem_alignment),
         @returnAddress(),
     );
     if (ptr == null) @panic("zphysics: out of memory");
@@ -3983,7 +3983,7 @@ fn zphysicsAlignedAlloc(size: usize, alignment: usize) callconv(.C) ?*anyopaque 
 
     const ptr = state.?.mem_allocator.rawAlloc(
         size,
-        std.math.log2_int(u29, @as(u29, @intCast(alignment))),
+        std.mem.Alignment.fromByteUnits(alignment),
         @returnAddress(),
     );
     if (ptr == null) @panic("zphysics: out of memory");
@@ -4007,7 +4007,7 @@ fn zphysicsFree(maybe_ptr: ?*anyopaque) callconv(.C) void {
 
         state.?.mem_allocator.rawFree(
             mem,
-            std.math.log2_int(u29, @as(u29, @intCast(info.alignment))),
+            std.mem.Alignment.fromByteUnits(info.alignment),
             @returnAddress(),
         );
     }
