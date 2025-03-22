@@ -371,6 +371,13 @@ pub const ObjectLayerFilter = extern struct {
     }
 };
 
+pub const PhysicsStepListenerContext = extern struct {
+    delta_time: f32,
+    is_first_step: bool,
+    is_last_step: bool,
+    physics_system: *PhysicsSystem,
+};
+
 pub const PhysicsStepListener = extern struct {
     __v: *const VTable,
 
@@ -378,16 +385,16 @@ pub const PhysicsStepListener = extern struct {
 
     pub fn Methods(comptime T: type) type {
         return extern struct {
-            pub inline fn onStep(self: *const T, delta_time: f32, physics_system: *PhysicsSystem) void {
+            pub inline fn onStep(self: *const T, context: *const PhysicsStepListenerContext) void {
                 return @as(*const PhysicsStepListener.VTable, @ptrCast(self.__v))
-                    .onStep(@as(*PhysicsStepListener, @ptrCast(self)), delta_time, physics_system);
+                    .onStep(@as(*PhysicsStepListener, @ptrCast(self)), context);
             }
         };
     }
 
     pub const VTable = extern struct {
         __header: VTableHeader = .{},
-        onStep: *const fn (self: *PhysicsStepListener, f32, *PhysicsSystem) callconv(.C) void,
+        onStep: *const fn (self: *PhysicsStepListener, *const PhysicsStepListenerContext) callconv(.C) void,
     };
 
     comptime {
@@ -1099,6 +1106,7 @@ pub const CharacterSettings = extern struct {
     mass: f32,
     friction: f32,
     gravity_factor: f32,
+    allowed_DOFs: AllowedDOFs,
 
     comptime {
         assert(@sizeOf(CharacterSettings) == @sizeOf(c.JPC_CharacterSettings));
@@ -1208,13 +1216,17 @@ pub const BodyType = enum(c.JPC_BodyType) {
 };
 
 pub const RayCastSettings = extern struct {
-    back_face_mode: BackFaceMode,
+    back_face_mode_triangles: BackFaceMode,
+    back_face_mode_convex: BackFaceMode,
     treat_convex_as_solid: bool,
 
     comptime {
         assert(@sizeOf(RayCastSettings) == @sizeOf(c.JPC_RayCastSettings));
         assert(
-            @offsetOf(RayCastSettings, "back_face_mode") == @offsetOf(c.JPC_RayCastSettings, "back_face_mode"),
+            @offsetOf(RayCastSettings, "back_face_mode_triangles") == @offsetOf(c.JPC_RayCastSettings, "back_face_mode_triangles"),
+        );
+        assert(
+            @offsetOf(RayCastSettings, "back_face_mode_convex") == @offsetOf(c.JPC_RayCastSettings, "back_face_mode_convex"),
         );
         assert(@offsetOf(RayCastSettings, "treat_convex_as_solid") ==
             @offsetOf(c.JPC_RayCastSettings, "treat_convex_as_solid"));
@@ -4153,7 +4165,9 @@ test "zphysics.basic" {
     _ = physics_system.getNarrowPhaseQuery();
     _ = physics_system.getNarrowPhaseQueryNoLock();
 
-    var my_step_listener = test_cb1.MyPhysicsStepListener{};
+    var my_step_listener = test_cb1.MyPhysicsStepListener{
+        .physics_system = physics_system,
+    };
     physics_system.addStepListener(@ptrCast(@alignCast(&my_step_listener)));
 
     physics_system.optimizeBroadPhase();
@@ -4959,13 +4973,13 @@ const test_cb1 = struct {
         usingnamespace PhysicsStepListener.Methods(@This());
         __v: *const PhysicsStepListener.VTable = &vtable,
         steps_heard: u32 = 0,
+        physics_system: *PhysicsSystem,
 
         const vtable = PhysicsStepListener.VTable{ .onStep = _onStep };
 
-        fn _onStep(psl: *PhysicsStepListener, delta_time: f32, physics_system: *PhysicsSystem) callconv(.C) void {
-            _ = delta_time;
-            _ = physics_system;
+        fn _onStep(psl: *PhysicsStepListener, context: *const PhysicsStepListenerContext) callconv(.C) void {
             const self = @as(*MyPhysicsStepListener, @ptrCast(psl));
+            assert(context.physics_system == self.physics_system);
             self.steps_heard += 1;
         }
     };

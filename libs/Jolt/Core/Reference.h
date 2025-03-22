@@ -59,6 +59,7 @@ public:
 
 	inline void				Release() const
 	{
+	#ifndef JPH_TSAN_ENABLED
 		// Releasing a reference must use release semantics...
 		if (mRefCount.fetch_sub(1, memory_order_release) == 1)
 		{
@@ -66,6 +67,11 @@ public:
 			atomic_thread_fence(memory_order_acquire);
 			delete static_cast<const T *>(this);
 		}
+	#else
+		// But under TSAN, we cannot use atomic_thread_fence, so we use an acq_rel operation unconditionally instead
+		if (mRefCount.fetch_sub(1, memory_order_acq_rel) == 1)
+			delete static_cast<const T *>(this);
+	#endif
 	}
 
 	/// INTERNAL HELPER FUNCTION USED BY SERIALIZATION
@@ -128,6 +134,12 @@ public:
 	/// Get pointer
 	inline T *				GetPtr() const									{ return mPtr; }
 
+	/// Get hash for this object
+	uint64					GetHash() const
+	{
+		return Hash<T *> { } (mPtr);
+	}
+
 	/// INTERNAL HELPER FUNCTION USED BY SERIALIZATION
 	void **					InternalGetPointer()							{ return reinterpret_cast<void **>(&mPtr); }
 
@@ -184,6 +196,12 @@ public:
 	/// Get pointer
 	inline const T *		GetPtr() const									{ return mPtr; }
 
+	/// Get hash for this object
+	uint64					GetHash() const
+	{
+		return Hash<const T *> { } (mPtr);
+	}
+
 	/// INTERNAL HELPER FUNCTION USED BY SERIALIZATION
 	void **					InternalGetPointer()							{ return const_cast<void **>(reinterpret_cast<const void **>(&mPtr)); }
 
@@ -208,7 +226,7 @@ namespace std
 	{
 		size_t operator () (const JPH::Ref<T> &inRHS) const
 		{
-			return hash<T *> { }(inRHS.GetPtr());
+			return size_t(inRHS.GetHash());
 		}
 	};
 
@@ -218,7 +236,7 @@ namespace std
 	{
 		size_t operator () (const JPH::RefConst<T> &inRHS) const
 		{
-			return hash<const T *> { }(inRHS.GetPtr());
+			return size_t(inRHS.GetHash());
 		}
 	};
 }
