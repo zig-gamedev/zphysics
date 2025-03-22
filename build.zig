@@ -37,6 +37,12 @@ pub fn build(b: *std.Build) void {
         ) orelse true,
     };
 
+    const user_extensions = b.option(
+        []const std.Build.LazyPath,
+        "user_extensions",
+        "List of user source files to add to the joltc library",
+    ) orelse &.{};
+
     const options_step = b.addOptions();
     inline for (std.meta.fields(@TypeOf(options))) |field| {
         options_step.addOption(field.type, field.name, @field(options, field.name));
@@ -232,6 +238,13 @@ pub fn build(b: *std.Build) void {
         },
         .flags = c_flags,
     });
+
+    for (user_extensions) |user_extension| {
+        joltc.addCSourceFile(.{
+            .file = user_extension,
+            .flags = c_flags,
+        });
+    }
 
     if (target.result.abi != .msvc or optimize != .Debug) {
         joltc.addCSourceFiles(.{
