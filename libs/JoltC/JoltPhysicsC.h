@@ -2279,6 +2279,8 @@ JPC_Body_GetWorldSpaceSurfaceNormal(const JPC_Body *in_body,
                                     JPC_SubShapeID in_sub_shape_id,
                                     const JPC_Real in_position[3], // world space
                                     float out_normal_vector[3]);
+JPC_API JPC_Body*
+JPC_Body_GetFixedToWorld();
 //--------------------------------------------------------------------------------------------------
 //
 // JPC_BodyID

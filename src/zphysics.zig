@@ -2568,6 +2568,10 @@ pub const Body = extern struct {
         return normal;
     }
 
+    pub fn getFixedToWorld() *Body {
+        return @ptrCast(c.JPC_Body_GetFixedToWorld());
+    }
+
     comptime {
         assert(@sizeOf(Body) == @sizeOf(c.JPC_Body));
         assert(@offsetOf(Body, "flags") == @offsetOf(c.JPC_Body, "flags"));

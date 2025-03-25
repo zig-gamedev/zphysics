@@ -2960,6 +2960,12 @@ JPC_Body_GetWorldSpaceSurfaceNormal(const JPC_Body *in_body,
     storeVec3(out_normal_vector, v);
 }
 //--------------------------------------------------------------------------------------------------
+JPC_API JPC_Body*
+JPC_Body_GetFixedToWorld()
+{
+    return toJpc(&JPH::Body::sFixedToWorld);
+}
+//--------------------------------------------------------------------------------------------------
 //
 // JPC_MotionProperties
 //
