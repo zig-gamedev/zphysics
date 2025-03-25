@@ -1752,11 +1752,11 @@ pub const PhysicsSystem = opaque {
         c.JPC_PhysicsSystem_RemoveStepListener(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)), listener);
     }
 
-    pub fn addConstraint(physics_system: *PhysicsSystem, two_body_constraint: ?*anyopaque) void {
-        c.JPC_PhysicsSystem_AddConstraint(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)), two_body_constraint);
+    pub fn addConstraint(physics_system: *PhysicsSystem, constraint: ?*Constraint) void {
+        c.JPC_PhysicsSystem_AddConstraint(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)), @ptrCast(constraint));
     }
-    pub fn removeConstraint(physics_system: *PhysicsSystem, two_body_constraint: ?*anyopaque) void {
-        c.JPC_PhysicsSystem_RemoveConstraint(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)), two_body_constraint);
+    pub fn removeConstraint(physics_system: *PhysicsSystem, constraint: ?*Constraint) void {
+        c.JPC_PhysicsSystem_RemoveConstraint(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)), @ptrCast(constraint));
     }
 
     pub fn update(
