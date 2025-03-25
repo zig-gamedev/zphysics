@@ -985,6 +985,8 @@ typedef struct JPC_CharacterContactListenerVTable
 
 typedef struct JPC_ContactListenerVTable
 {
+    _JPC_VTABLE_HEADER;
+
     // Optional, can be NULL.
     JPC_ValidateResult
     (*OnContactValidate)(void *in_self,

@@ -717,6 +717,7 @@ pub const ContactListener = extern struct {
     }
 
     pub const VTable = extern struct {
+        __header: VTableHeader = .{},
         onContactValidate: ?*const fn (
             self: *ContactListener,
             body1: *const Body,
