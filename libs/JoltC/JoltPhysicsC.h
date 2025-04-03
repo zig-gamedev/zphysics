@@ -1048,6 +1048,10 @@ typedef struct JPC_DebugRendererVTable
                                   const uint32_t *in_indices,
                                   uint32_t in_index_count);
 
+    // Optional
+    void
+    (*DestroyTriangleBatch)(void *in_self, const void *in_primitive);
+
     // Required, *cannot* be NULL.
     void
     (*DrawGeometry)(void *in_self,

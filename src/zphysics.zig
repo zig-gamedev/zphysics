@@ -1278,7 +1278,6 @@ pub const DebugRenderer = if (!debug_renderer_enabled) extern struct {} else ext
 
     pub fn destroySingleton() void {
         _ = c.JPC_DestroyDebugRendererSingleton(); // For Zig API, don't care if one actually existed, discard error.
-
     }
 
     pub fn createTriangleBatch(primitive_in: *const anyopaque) *TriangleBatch {
@@ -1422,6 +1421,10 @@ pub const DebugRenderer = if (!debug_renderer_enabled) extern struct {} else ext
                 indices: [*]u32,
                 index_count: u32,
             ) callconv(.C) *anyopaque = null,
+            destroyTriangleBatch: ?*const fn (
+                self: *T,
+                batch: *const anyopaque,
+            ) callconv(.C) void = null,
             drawGeometry: ?*const fn (
                 self: *T,
                 model_matrix: *const RMatrix,

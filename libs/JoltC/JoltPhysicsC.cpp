@@ -735,7 +735,14 @@ public:
     {
     public:
         JPH_OVERRIDE_NEW_DELETE
-        BatchImpl(const JPC_DebugRenderer_Primitive *prim) : RenderPrimitive(prim) { }
+        BatchImpl(const JPC_DebugRenderer_Primitive *c_primitive) : RenderPrimitive(c_primitive) {}
+        ~BatchImpl()
+        {
+            if (sInstance && sInstance->c_renderer->vtbl->DestroyTriangleBatch)
+            {
+                sInstance->c_renderer->vtbl->DestroyTriangleBatch(sInstance->c_renderer, c_primitive);
+            }
+        }
 
         virtual void AddRef() override
         {
