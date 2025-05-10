@@ -26,18 +26,36 @@ pub const SharedMutex = opaque {};
 
 pub const BroadPhaseLayer = c.JPC_BroadPhaseLayer;
 pub const ObjectLayer = c.JPC_ObjectLayer;
-pub const BodyId = c.JPC_BodyID;
-pub const SubShapeId = c.JPC_SubShapeID;
+
+const BodyIdInt = std.meta.fieldInfo(c.JPC_BodyID, .id).type;
+pub const BodyId = enum(BodyIdInt) {
+    invalid = c.JPC_BODY_ID_INVALID,
+    index_bits = c.JPC_BODY_ID_INDEX_BITS,
+    sequence_bits = c.JPC_BODY_ID_SEQUENCE_BITS,
+    sequence_shift = c.JPC_BODY_ID_SEQUENCE_SHIFT,
+    _,
+
+    pub inline fn indexBits(self: BodyId) BodyIdInt {
+        return @intFromEnum(self) & @intFromEnum(BodyId.index_bits);
+    }
+
+    pub inline fn toJpc(self: BodyId) c.JPC_BodyID {
+        return .{ .id = @intFromEnum(self) };
+    }
+};
+
+const SubShapeIdInt = std.meta.fieldInfo(c.JPC_SubShapeID, .id).type;
+pub const SubShapeId = enum(SubShapeIdInt) {
+    empty = c.JPC_SUB_SHAPE_ID_EMPTY,
+    _,
+
+    pub inline fn toJpc(self: SubShapeId) c.JPC_SubShapeID {
+        return .{ .id = @intFromEnum(self) };
+    }
+};
 
 pub const max_physics_jobs = c.JPC_MAX_PHYSICS_JOBS;
 pub const max_physics_barriers = c.JPC_MAX_PHYSICS_BARRIERS;
-
-pub const body_id_invalid: BodyId = c.JPC_BODY_ID_INVALID;
-pub const body_id_index_bits: BodyId = c.JPC_BODY_ID_INDEX_BITS;
-pub const body_id_sequence_bits: BodyId = c.JPC_BODY_ID_SEQUENCE_BITS;
-pub const body_id_sequence_shift: BodyId = c.JPC_BODY_ID_SEQUENCE_SHIFT;
-
-pub const sub_shape_id_empty: SubShapeId = c.JPC_SUB_SHAPE_ID_EMPTY;
 
 pub const debug_renderer_enabled = options.enable_debug_renderer;
 comptime {
@@ -58,14 +76,14 @@ pub inline fn isValidBodyPointer(body: *const Body) bool {
 /// Use `PhysicsSystem.getBodies()` to get all the bodies.
 /// NOTE: This function is *not* protected by a lock, use with care!
 pub inline fn tryGetBody(all_bodies: []const *const Body, body_id: BodyId) ?*const Body {
-    const body = all_bodies[body_id & body_id_index_bits];
+    const body = all_bodies[body_id.indexBits()];
     return if (isValidBodyPointer(body) and body.id == body_id) body else null;
 }
 /// Access a body, will return a `null` if the `body_id` is no longer valid.
 /// Use `PhysicsSystem.getBodiesMut()` to get all the bodies.
 /// NOTE: This function is *not* protected by a lock, use with care!
 pub inline fn tryGetBodyMut(all_bodies: []const *Body, body_id: BodyId) ?*Body {
-    const body = all_bodies[body_id & body_id_index_bits];
+    const body = all_bodies[body_id.indexBits()];
     return if (isValidBodyPointer(body) and body.id == body_id) body else null;
 }
 
@@ -842,7 +860,7 @@ pub const ShapeFilter = extern struct {
             shape2: *const Shape,
             sub_shape_id2: *const SubShapeId,
         ) callconv(.C) bool,
-        receiving_body_id: u32 = body_id_invalid, // set by jolt before each call to either of the functions above
+        receiving_body_id: BodyId = .invalid, // set by jolt before each call to either of the functions above
     };
 
     comptime {
@@ -906,7 +924,7 @@ pub const SubShapeIdPair = extern struct {
 };
 
 pub const SubShapeIDCreator = extern struct {
-    id: SubShapeId = sub_shape_id_empty,
+    id: SubShapeId = .empty,
     current_bit: u32 = 0,
 
     comptime {
@@ -1194,7 +1212,7 @@ pub const RRayCast = extern struct {
 };
 
 pub const RayCastResult = extern struct {
-    body_id: BodyId = body_id_invalid,
+    body_id: BodyId = .invalid,
     fraction: f32 = 1.0 + flt_epsilon,
     sub_shape_id: SubShapeId = undefined,
 
@@ -1820,7 +1838,7 @@ pub const PhysicsSystem = opaque {
             @as(*const c.JPC_PhysicsSystem, @ptrCast(physics_system)),
             @as(u32, @intCast(body_ids.capacity)),
             &num_body_ids,
-            body_ids.items.ptr,
+            @ptrCast(body_ids.items.ptr),
         );
         body_ids.items.len = num_body_ids;
     }
@@ -1832,7 +1850,7 @@ pub const PhysicsSystem = opaque {
             @as(*const c.JPC_PhysicsSystem, @ptrCast(physics_system)),
             @as(u32, @intCast(body_ids.capacity)),
             &num_body_ids,
-            body_ids.items.ptr,
+            @ptrCast(body_ids.items.ptr),
         );
         body_ids.items.len = num_body_ids;
     }
@@ -1867,7 +1885,7 @@ pub const BodyLockRead = extern struct {
     ) void {
         c.JPC_BodyLockInterface_LockRead(
             @as(*const c.JPC_BodyLockInterface, @ptrCast(lock_interface)),
-            body_id,
+            body_id.toJpc(),
             @as(*c.JPC_BodyLockRead, @ptrCast(read_lock)),
         );
     }
@@ -1898,7 +1916,7 @@ pub const BodyLockWrite = extern struct {
     ) void {
         c.JPC_BodyLockInterface_LockWrite(
             @as(*const c.JPC_BodyLockInterface, @ptrCast(lock_interface)),
-            body_id,
+            body_id.toJpc(),
             @as(*c.JPC_BodyLockWrite, @ptrCast(write_lock)),
         );
     }
@@ -1935,7 +1953,7 @@ pub const BodyInterface = opaque {
     pub fn createBodyWithId(body_iface: *BodyInterface, body_id: BodyId, settings: BodyCreationSettings) !*Body {
         const body = c.JPC_BodyInterface_CreateBodyWithID(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             @as(*const c.JPC_BodyCreationSettings, @ptrCast(&settings)),
         );
         if (body == null)
@@ -1944,24 +1962,34 @@ pub const BodyInterface = opaque {
     }
 
     pub fn destroyBody(body_iface: *BodyInterface, body_id: BodyId) void {
-        c.JPC_BodyInterface_DestroyBody(@as(*c.JPC_BodyInterface, @ptrCast(body_iface)), body_id);
+        c.JPC_BodyInterface_DestroyBody(
+            @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
+            body_id.toJpc(),
+        );
     }
 
     pub fn addBody(body_iface: *BodyInterface, body_id: BodyId, mode: Activation) void {
-        c.JPC_BodyInterface_AddBody(@as(*c.JPC_BodyInterface, @ptrCast(body_iface)), body_id, @intFromEnum(mode));
+        c.JPC_BodyInterface_AddBody(
+            @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
+            body_id.toJpc(),
+            @intFromEnum(mode),
+        );
     }
 
     pub fn removeBody(body_iface: *BodyInterface, body_id: BodyId) void {
-        c.JPC_BodyInterface_RemoveBody(@as(*c.JPC_BodyInterface, @ptrCast(body_iface)), body_id);
+        c.JPC_BodyInterface_RemoveBody(
+            @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
+            body_id.toJpc(),
+        );
     }
 
     pub fn createAndAddBody(body_iface: *BodyInterface, settings: BodyCreationSettings, mode: Activation) !BodyId {
-        const body_id = c.JPC_BodyInterface_CreateAndAddBody(
+        const body_id: BodyId = @enumFromInt(c.JPC_BodyInterface_CreateAndAddBody(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
             @as(*const c.JPC_BodyCreationSettings, @ptrCast(&settings)),
             @intFromEnum(mode),
-        );
-        if (body_id == body_id_invalid)
+        ).id);
+        if (body_id == .invalid)
             return error.FailedToCreateBody;
         return body_id;
     }
@@ -1972,19 +2000,47 @@ pub const BodyInterface = opaque {
     }
 
     pub fn isAdded(body_iface: *const BodyInterface, body_id: BodyId) bool {
-        return c.JPC_BodyInterface_IsAdded(@as(*const c.JPC_BodyInterface, @ptrCast(body_iface)), body_id);
+        return c.JPC_BodyInterface_IsAdded(
+            @as(*const c.JPC_BodyInterface, @ptrCast(body_iface)),
+            body_id.toJpc(),
+        );
     }
 
     pub fn activate(body_iface: *BodyInterface, body_id: BodyId) void {
-        return c.JPC_BodyInterface_ActivateBody(@as(*c.JPC_BodyInterface, @ptrCast(body_iface)), body_id);
+        return c.JPC_BodyInterface_ActivateBody(
+            @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
+            body_id.toJpc(),
+        );
+    }
+
+    pub fn activateBodies(body_iface: *BodyInterface, body_ids: []const BodyId) void {
+        return c.JPC_BodyInterface_ActivateBodies(
+            @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
+            @ptrCast(body_ids.ptr),
+            @intCast(body_ids.len),
+        );
     }
 
     pub fn deactivate(body_iface: *BodyInterface, body_id: BodyId) void {
-        return c.JPC_BodyInterface_DeactivateBody(@as(*c.JPC_BodyInterface, @ptrCast(body_iface)), body_id);
+        return c.JPC_BodyInterface_DeactivateBody(
+            @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
+            body_id.toJpc(),
+        );
+    }
+
+    pub fn deactivateBodies(body_iface: *BodyInterface, body_ids: []const BodyId) void {
+        return c.JPC_BodyInterface_DeactivateBodies(
+            @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
+            @ptrCast(body_ids.ptr),
+            @intCast(body_ids.len),
+        );
     }
 
     pub fn isActive(body_iface: *const BodyInterface, body_id: BodyId) bool {
-        return c.JPC_BodyInterface_IsActive(@as(*const c.JPC_BodyInterface, @ptrCast(body_iface)), body_id);
+        return c.JPC_BodyInterface_IsActive(
+            @as(*const c.JPC_BodyInterface, @ptrCast(body_iface)),
+            body_id.toJpc(),
+        );
     }
 
     pub fn setLinearAndAngularVelocity(
@@ -1995,7 +2051,7 @@ pub const BodyInterface = opaque {
     ) void {
         return c.JPC_BodyInterface_SetLinearAndAngularVelocity(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &linear_velocity,
             &angular_velocity,
         );
@@ -2008,7 +2064,7 @@ pub const BodyInterface = opaque {
         var angular: [3]f32 = undefined;
         c.JPC_BodyInterface_GetLinearAndAngularVelocity(
             @as(*const c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &linear,
             &angular,
         );
@@ -2018,7 +2074,7 @@ pub const BodyInterface = opaque {
     pub fn setLinearVelocity(body_iface: *BodyInterface, body_id: BodyId, velocity: [3]f32) void {
         return c.JPC_BodyInterface_SetLinearVelocity(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &velocity,
         );
     }
@@ -2026,7 +2082,7 @@ pub const BodyInterface = opaque {
         var velocity: [3]f32 = undefined;
         c.JPC_BodyInterface_GetLinearVelocity(
             @as(*const c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &velocity,
         );
         return velocity;
@@ -2035,7 +2091,7 @@ pub const BodyInterface = opaque {
     pub fn addLinearVelocity(body_iface: *BodyInterface, body_id: BodyId, velocity: [3]f32) void {
         return c.JPC_BodyInterface_AddLinearVelocity(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &velocity,
         );
     }
@@ -2048,7 +2104,7 @@ pub const BodyInterface = opaque {
     ) void {
         return c.JPC_BodyInterface_AddLinearAndAngularVelocity(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &linear_velocity,
             &angular_velocity,
         );
@@ -2057,7 +2113,7 @@ pub const BodyInterface = opaque {
     pub fn setAngularVelocity(body_iface: *BodyInterface, body_id: BodyId, velocity: [3]f32) void {
         return c.JPC_BodyInterface_SetAngularVelocity(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &velocity,
         );
     }
@@ -2065,7 +2121,7 @@ pub const BodyInterface = opaque {
         var velocity: [3]f32 = undefined;
         c.JPC_BodyInterface_GetAngularVelocity(
             @as(*const c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &velocity,
         );
         return velocity;
@@ -2075,7 +2131,7 @@ pub const BodyInterface = opaque {
         var velocity: [3]f32 = undefined;
         c.JPC_BodyInterface_GetPointVelocity(
             @as(*const c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &point,
             &velocity,
         );
@@ -2086,21 +2142,21 @@ pub const BodyInterface = opaque {
         var position: [3]Real = undefined;
         c.JPC_BodyInterface_GetPosition(
             @as(*const c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &position,
         );
         return position;
     }
 
     pub fn setPosition(body_iface: *BodyInterface, body_id: BodyId, in_position: [3]Real, in_activation_type: Activation) void {
-        c.JPC_BodyInterface_SetPosition(@as(*c.JPC_BodyInterface, @ptrCast(body_iface)), body_id, &in_position, @intFromEnum(in_activation_type));
+        c.JPC_BodyInterface_SetPosition(@as(*c.JPC_BodyInterface, @ptrCast(body_iface)), body_id.toJpc(), &in_position, @intFromEnum(in_activation_type));
     }
 
     pub fn getCenterOfMassPosition(body_iface: *const BodyInterface, body_id: BodyId) [3]Real {
         var position: [3]Real = undefined;
         c.JPC_BodyInterface_GetCenterOfMassPosition(
             @as(*const c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &position,
         );
         return position;
@@ -2110,14 +2166,14 @@ pub const BodyInterface = opaque {
         var rotation: [4]f32 = undefined;
         c.JPC_BodyInterface_GetRotation(
             @as(*const c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &rotation,
         );
         return rotation;
     }
 
     pub fn setRotation(body_iface: *BodyInterface, body_id: BodyId, in_rotation: [4]f32, in_activation_type: Activation) void {
-        c.JPC_BodyInterface_SetRotation(@as(*c.JPC_BodyInterface, @ptrCast(body_iface)), body_id, &in_rotation, @intFromEnum(in_activation_type));
+        c.JPC_BodyInterface_SetRotation(@as(*c.JPC_BodyInterface, @ptrCast(body_iface)), body_id.toJpc(), &in_rotation, @intFromEnum(in_activation_type));
     }
 
     pub fn setPositionRotationAndVelocity(
@@ -2130,7 +2186,7 @@ pub const BodyInterface = opaque {
     ) void {
         return c.JPC_BodyInterface_SetPositionRotationAndVelocity(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &position,
             &rotation,
             &linear_velocity,
@@ -2141,14 +2197,14 @@ pub const BodyInterface = opaque {
     pub fn addForce(body_iface: *BodyInterface, body_id: BodyId, force: [3]f32) void {
         return c.JPC_BodyInterface_AddForce(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &force,
         );
     }
     pub fn addForceAtPosition(body_iface: *BodyInterface, body_id: BodyId, force: [3]f32, position: [3]Real) void {
         return c.JPC_BodyInterface_AddForceAtPosition(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &force,
             &position,
         );
@@ -2157,14 +2213,14 @@ pub const BodyInterface = opaque {
     pub fn addTorque(body_iface: *BodyInterface, body_id: BodyId, torque: [3]f32) void {
         return c.JPC_BodyInterface_AddTorque(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &torque,
         );
     }
     pub fn addForceAndTorque(body_iface: *BodyInterface, body_id: BodyId, force: [3]f32, torque: [3]f32) void {
         return c.JPC_BodyInterface_AddForceAndTorque(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &force,
             &torque,
         );
@@ -2173,7 +2229,7 @@ pub const BodyInterface = opaque {
     pub fn addImpulse(body_iface: *BodyInterface, body_id: BodyId, impulse: [3]f32) void {
         return c.JPC_BodyInterface_AddImpulse(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &impulse,
         );
     }
@@ -2185,7 +2241,7 @@ pub const BodyInterface = opaque {
     ) void {
         return c.JPC_BodyInterface_AddImpulseAtPosition(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &impulse,
             &position,
         );
@@ -2194,7 +2250,7 @@ pub const BodyInterface = opaque {
     pub fn addAngularImpulse(body_iface: *BodyInterface, body_id: BodyId, impulse: [3]f32) void {
         return c.JPC_BodyInterface_AddAngularImpulse(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             &impulse,
         );
     }
@@ -2203,7 +2259,7 @@ pub const BodyInterface = opaque {
         return @as(MotionType, @enumFromInt(
             c.JPC_BodyInterface_GetMotionType(
                 @ptrCast(body_iface),
-                body_id,
+                body_id.toJpc(),
             ),
         ));
     }
@@ -2211,20 +2267,23 @@ pub const BodyInterface = opaque {
     pub fn setMotionType(body_iface: *BodyInterface, body_id: BodyId, in_motion_type: MotionType, in_activation_type: Activation) void {
         return c.JPC_BodyInterface_SetMotionType(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             @intFromEnum(in_motion_type),
             @intFromEnum(in_activation_type),
         );
     }
 
     pub fn getObjectLayer(body_iface: *BodyInterface, body_id: BodyId) ObjectLayer {
-        return c.JPC_BodyInterface_GetObjectLayer(@as(*c.JPC_BodyInterface, @ptrCast(body_iface)), body_id);
+        return c.JPC_BodyInterface_GetObjectLayer(
+            @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
+            body_id.toJpc(),
+        );
     }
 
     pub fn setObjectLayer(body_iface: *BodyInterface, body_id: BodyId, in_layer: ObjectLayer) void {
         c.JPC_BodyInterface_SetObjectLayer(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
-            body_id,
+            body_id.toJpc(),
             in_layer,
         );
     }
@@ -2284,7 +2343,7 @@ pub const Body = extern struct {
     flags: u8,
 
     pub fn getId(body: *const Body) BodyId {
-        return c.JPC_Body_GetID(@as(*const c.JPC_Body, @ptrCast(body)));
+        return @enumFromInt(c.JPC_Body_GetID(@as(*const c.JPC_Body, @ptrCast(body))).id);
     }
 
     pub fn isActive(body: *const Body) bool {
@@ -2565,7 +2624,7 @@ pub const Body = extern struct {
         var normal: [3]f32 = undefined;
         c.JPC_Body_GetWorldSpaceSurfaceNormal(
             @as(*const c.JPC_Body, @ptrCast(body)),
-            sub_shape_id,
+            sub_shape_id.toJpc(),
             &position,
             &normal,
         );
@@ -3648,7 +3707,7 @@ pub const Shape = opaque {
                 var normal: [3]f32 = undefined;
                 c.JPC_Shape_GetSurfaceNormal(
                     @as(*const c.JPC_Shape, @ptrCast(shape)),
-                    sub_shape_id,
+                    sub_shape_id.toJpc(),
                     &local_pos,
                     &normal,
                 );
@@ -3664,7 +3723,7 @@ pub const Shape = opaque {
             ) SupportingFace {
                 const c_face = c.JPC_Shape_GetSupportingFace(
                     @as(*const c.JPC_Shape, @ptrCast(shape)),
-                    sub_shape_id,
+                    sub_shape_id.toJpc(),
                     &direction,
                     &shape_scale,
                     &com_transform,
@@ -4579,23 +4638,23 @@ test "zphysics.body.basic" {
         var result = query.castRay(.{ .origin = .{ 0, 10, 0, 1 }, .direction = .{ 0, -20, 0, 0 } }, .{});
         try expect(result.has_hit == true);
         try expect(result.hit.body_id == body_id);
-        try expect(result.hit.sub_shape_id == sub_shape_id_empty);
+        try expect(result.hit.sub_shape_id == .empty);
         try expect(std.math.approxEqAbs(f32, result.hit.fraction, 0.5, 0.001) == true);
 
         result = query.castRay(.{ .origin = .{ 0, 10, 0, 1 }, .direction = .{ 0, 20, 0, 0 } }, .{});
         try expect(result.has_hit == false);
-        try expect(result.hit.body_id == body_id_invalid);
+        try expect(result.hit.body_id == .invalid);
 
         result = query.castRay(.{ .origin = .{ 0, 10, 0, 1 }, .direction = .{ 0, -5, 0, 0 } }, .{});
         try expect(result.has_hit == false);
-        try expect(result.hit.body_id == body_id_invalid);
+        try expect(result.hit.body_id == .invalid);
 
         const ray = c.JPC_RRayCast{
             .origin = .{ 0, 10, 0, 0 },
             .direction = .{ 0, -20, 0, 0 },
         };
         var hit: c.JPC_RayCastResult = .{
-            .body_id = body_id_invalid,
+            .body_id = BodyId.invalid.toJpc(),
             .fraction = 1.0 + flt_epsilon,
             .sub_shape_id = undefined,
         };
@@ -4638,10 +4697,10 @@ test "zphysics.body.basic" {
         if (read_lock.body) |locked_body| {
             const all_bodies: []const *const Body = physics_system.getBodiesUnsafe();
 
-            try expect(isValidBodyPointer(all_bodies[body_id & body_id_index_bits]));
-            try expect(locked_body == all_bodies[body_id & body_id_index_bits]);
+            try expect(isValidBodyPointer(all_bodies[body_id.indexBits()]));
+            try expect(locked_body == all_bodies[body_id.indexBits()]);
             try expect(locked_body.id == body_id);
-            try expect(locked_body.id == all_bodies[body_id & body_id_index_bits].id);
+            try expect(locked_body.id == all_bodies[body_id.indexBits()].id);
         }
     }
     {
@@ -4654,13 +4713,13 @@ test "zphysics.body.basic" {
         if (write_lock.body) |locked_body| {
             const all_bodies_mut: []const *Body = physics_system.getBodiesMutUnsafe();
 
-            try expect(isValidBodyPointer(all_bodies_mut[body_id & body_id_index_bits]));
-            try expect(locked_body == all_bodies_mut[body_id & body_id_index_bits]);
+            try expect(isValidBodyPointer(all_bodies_mut[body_id.indexBits()]));
+            try expect(locked_body == all_bodies_mut[body_id.indexBits()]);
             try expect(locked_body.id == body_id);
-            try expect(locked_body.id == all_bodies_mut[body_id & body_id_index_bits].id);
+            try expect(locked_body.id == all_bodies_mut[body_id.indexBits()].id);
 
-            all_bodies_mut[body_id & body_id_index_bits].user_data = 12345;
-            try expect(all_bodies_mut[body_id & body_id_index_bits].user_data == 12345);
+            all_bodies_mut[body_id.indexBits()].user_data = 12345;
+            try expect(all_bodies_mut[body_id.indexBits()].user_data == 12345);
         }
     }
 
@@ -4763,8 +4822,8 @@ test "zphysics.body.motion" {
     try expect(body.user_data == 0xC0DE_C0DE_C0DE_C0DE);
     try expect(body.getAllowSleeping() == false);
 
-    const normal0 = body.getWorldSpaceSurfaceNormal(sub_shape_id_empty, .{ 0, 12, 0 });
-    const normal1 = body.getWorldSpaceSurfaceNormal(sub_shape_id_empty, .{ -1, 10, 0 });
+    const normal0 = body.getWorldSpaceSurfaceNormal(.empty, .{ 0, 12, 0 });
+    const normal1 = body.getWorldSpaceSurfaceNormal(.empty, .{ -1, 10, 0 });
 
     try expect(std.math.approxEqAbs(f32, normal0[0], 0.0, 0.001) == true);
     try expect(std.math.approxEqAbs(f32, normal0[1], 1.0, 0.001) == true);

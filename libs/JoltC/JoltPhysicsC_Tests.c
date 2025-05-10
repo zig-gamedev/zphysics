@@ -541,8 +541,8 @@ JoltCTest_Basic2(void)
     JPC_Body *floor = JPC_BodyInterface_CreateBody(body_interface, &floor_settings);
     if (floor == NULL) return 0;
     const JPC_BodyID floor_id = JPC_Body_GetID(floor);
-    if (((floor_id & JPC_BODY_ID_SEQUENCE_BITS) >> JPC_BODY_ID_SEQUENCE_SHIFT) != 1) return 0;
-    if ((floor_id & JPC_BODY_ID_INDEX_BITS) != 0) return 0;
+    if (((floor_id.id & JPC_BODY_ID_SEQUENCE_BITS) >> JPC_BODY_ID_SEQUENCE_SHIFT) != 1) return 0;
+    if ((floor_id.id & JPC_BODY_ID_INDEX_BITS) != 0) return 0;
     if (JPC_Body_IsStatic(floor) == false) return 0;
     if (JPC_Body_IsDynamic(floor) == true) return 0;
 
@@ -551,8 +551,8 @@ JoltCTest_Basic2(void)
     JPC_Body *floor1 = JPC_BodyInterface_CreateBody(body_interface, &floor_settings);
     if (floor1 == NULL) return 0;
     const JPC_BodyID floor1_id = JPC_Body_GetID(floor1);
-    if (((floor1_id & JPC_BODY_ID_SEQUENCE_BITS) >> JPC_BODY_ID_SEQUENCE_SHIFT) != 1) return 0;
-    if ((floor1_id & JPC_BODY_ID_INDEX_BITS) != 1) return 0;
+    if (((floor1_id.id & JPC_BODY_ID_SEQUENCE_BITS) >> JPC_BODY_ID_SEQUENCE_SHIFT) != 1) return 0;
+    if ((floor1_id.id & JPC_BODY_ID_INDEX_BITS) != 1) return 0;
 
     if (JPC_BodyInterface_IsAdded(body_interface, floor_id) != false) return 0;
     if (JPC_BodyInterface_IsAdded(body_interface, floor1_id) != false) return 0;
@@ -688,8 +688,8 @@ JoltCTest_HelloWorld(void)
         uint32_t num_body_ids = 0;
         JPC_PhysicsSystem_GetBodyIDs(physics_system, 2, &num_body_ids, &body_ids[0]);
         if (num_body_ids != 2) return 0;
-        if (body_ids[0] != floor_id) return 0;
-        if (body_ids[1] != sphere_id) return 0;
+        if (!JPC_ID_EQ(body_ids[0], floor_id)) return 0;
+        if (!JPC_ID_EQ(body_ids[1], sphere_id)) return 0;
     }
 
     // Test JPC_PhysicsSystem_GetActiveBodyIDs()
@@ -698,7 +698,7 @@ JoltCTest_HelloWorld(void)
         uint32_t num_body_ids = 0;
         JPC_PhysicsSystem_GetActiveBodyIDs(physics_system, 2, &num_body_ids, &body_ids[0]);
         if (num_body_ids != 1) return 0;
-        if (body_ids[0] != sphere_id) return 0;
+        if (!JPC_ID_EQ(body_ids[0], sphere_id)) return 0;
     }
 
 #ifdef PRINT_OUTPUT
@@ -798,7 +798,7 @@ JoltCTest_HelloWorld(void)
             JPC_BodyLockInterface_LockRead(lock_iface, sphere_id, &lock);
             if (lock.body)
             {
-                JPC_Body *body = bodies[sphere_id & JPC_BODY_ID_INDEX_BITS];
+                JPC_Body *body = bodies[sphere_id.id & JPC_BODY_ID_INDEX_BITS];
                 if (!JPC_IS_VALID_BODY_POINTER(body)) return 0;
 
                 if (JPC_Body_IsDynamic(body) != true) return 0;
@@ -807,10 +807,10 @@ JoltCTest_HelloWorld(void)
                 if (body_checked == NULL) return 0;
 
                 if (body_checked != body) return 0;
-                if (body_checked->id != body->id) return 0;
+                if (!JPC_ID_EQ(body_checked->id, body->id)) return 0;
 
                 if (body != lock.body) return 0;
-                if (body->id != sphere_id) return 0;
+                if (!JPC_ID_EQ(body->id, sphere_id)) return 0;
             }
             JPC_BodyLockInterface_UnlockRead(lock_iface, &lock);
         }

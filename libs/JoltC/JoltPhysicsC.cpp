@@ -60,8 +60,8 @@ JPH_SUPPRESS_WARNINGS
 
 #define FN(name) static auto name
 
-FN(toJph)(JPC_BodyID in) { return JPH::BodyID(in); }
-FN(toJpc)(JPH::BodyID in) { return in.GetIndexAndSequenceNumber(); }
+FN(toJph)(JPC_BodyID in) { return JPH::BodyID(in.id); }
+FN(toJpc)(JPH::BodyID in) { return (JPC_BodyID){ in.GetIndexAndSequenceNumber() }; }
 
 FN(toJpc)(const JPH::Body *in) { assert(in); return reinterpret_cast<const JPC_Body *>(in); }
 FN(toJph)(const JPC_Body *in) { assert(in); return reinterpret_cast<const JPH::Body *>(in); }
@@ -301,6 +301,7 @@ FN(toJpc)(const JPH::CollisionGroup *in) { assert(in); return reinterpret_cast<c
 FN(toJpc)(JPH::CollisionGroup *in) { assert(in); return reinterpret_cast<JPC_CollisionGroup *>(in); }
 
 FN(toJph)(const JPC_SubShapeID *in) { assert(in); return reinterpret_cast<const JPH::SubShapeID *>(in); }
+FN(toJph)(const JPC_BodyID *in) { assert(in); return reinterpret_cast<const JPH::BodyID *>(in); }
 
 FN(toJpc)(const JPH::SubShapeIDCreator *in) { assert(in); return reinterpret_cast<const JPC_SubShapeIDCreator *>(in); }
 FN(toJph)(const JPC_SubShapeIDCreator *in) { assert(in); return reinterpret_cast<const JPH::SubShapeIDCreator *>(in); }
@@ -2510,9 +2511,21 @@ JPC_BodyInterface_ActivateBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_i
 }
 
 JPC_API void
+JPC_BodyInterface_ActivateBodies(JPC_BodyInterface *in_iface, const JPC_BodyID *in_body_ids, int in_num_bodies)
+{
+    toJph(in_iface)->ActivateBodies(toJph(in_body_ids), in_num_bodies);
+}
+
+JPC_API void
 JPC_BodyInterface_DeactivateBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_id)
 {
     toJph(in_iface)->DeactivateBody(toJph(in_body_id));
+}
+
+JPC_API void
+JPC_BodyInterface_DeactivateBodies(JPC_BodyInterface *in_iface, const JPC_BodyID *in_body_ids, int in_num_bodies)
+{
+    toJph(in_iface)->DeactivateBodies(toJph(in_body_ids), in_num_bodies);
 }
 
 JPC_API bool
@@ -2619,7 +2632,7 @@ JPC_BodyInterface_SetObjectLayer(JPC_BodyInterface *in_iface, JPC_BodyID in_body
 JPC_API JPC_BodyID
 JPC_Body_GetID(const JPC_Body *in_body)
 {
-    return toJph(in_body)->GetID().GetIndexAndSequenceNumber();
+    return (JPC_BodyID){ toJph(in_body)->GetID().GetIndexAndSequenceNumber() };
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API bool
@@ -3198,19 +3211,19 @@ JPC_MotionProperties_SetMaxAngularVelocity(JPC_MotionProperties *in_properties,
 JPC_API uint32_t
 JPC_BodyID_GetIndex(JPC_BodyID in_body_id)
 {
-    return JPH::BodyID(in_body_id).GetIndex();
+    return JPH::BodyID(in_body_id.id).GetIndex();
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API uint8_t
 JPC_BodyID_GetSequenceNumber(JPC_BodyID in_body_id)
 {
-    return JPH::BodyID(in_body_id).GetSequenceNumber();
+    return JPH::BodyID(in_body_id.id).GetSequenceNumber();
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API bool
 JPC_BodyID_IsInvalid(JPC_BodyID in_body_id)
 {
-    return JPH::BodyID(in_body_id).IsInvalid();
+    return JPH::BodyID(in_body_id.id).IsInvalid();
 }
 //--------------------------------------------------------------------------------------------------
 //
