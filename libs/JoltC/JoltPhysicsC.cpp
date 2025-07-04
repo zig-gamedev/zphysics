@@ -735,7 +735,14 @@ public:
     {
     public:
         JPH_OVERRIDE_NEW_DELETE
-        BatchImpl(const JPC_DebugRenderer_Primitive *prim) : RenderPrimitive(prim) { }
+        BatchImpl(const JPC_DebugRenderer_Primitive *c_primitive) : RenderPrimitive(c_primitive) {}
+        ~BatchImpl()
+        {
+            if (sInstance && sInstance->c_renderer->vtbl->DestroyTriangleBatch)
+            {
+                sInstance->c_renderer->vtbl->DestroyTriangleBatch(sInstance->c_renderer, c_primitive);
+            }
+        }
 
         virtual void AddRef() override
         {
@@ -1138,17 +1145,17 @@ JPC_PhysicsSystem_RemoveStepListener(JPC_PhysicsSystem *in_physics_system, void 
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API void
-JPC_PhysicsSystem_AddConstraint(JPC_PhysicsSystem *in_physics_system, void *in_two_body_constraint)
+JPC_PhysicsSystem_AddConstraint(JPC_PhysicsSystem *in_physics_system, JPC_Constraint *in_constraint)
 {
-    assert(in_two_body_constraint != nullptr);
-    toJph(in_physics_system)->AddConstraint(static_cast<JPH::TwoBodyConstraint *>(in_two_body_constraint));
+    assert(in_constraint != nullptr);
+    toJph(in_physics_system)->AddConstraint(toJph(in_constraint));
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API void
-JPC_PhysicsSystem_RemoveConstraint(JPC_PhysicsSystem *in_physics_system, void *in_two_body_constraint)
+JPC_PhysicsSystem_RemoveConstraint(JPC_PhysicsSystem *in_physics_system, JPC_Constraint *in_constraint)
 {
-    assert(in_two_body_constraint != nullptr);
-    toJph(in_physics_system)->RemoveConstraint(static_cast<JPH::TwoBodyConstraint *>(in_two_body_constraint));
+    assert(in_constraint != nullptr);
+    toJph(in_physics_system)->RemoveConstraint(toJph(in_constraint));
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API JPC_PhysicsUpdateError
@@ -2958,6 +2965,12 @@ JPC_Body_GetWorldSpaceSurfaceNormal(const JPC_Body *in_body,
     const JPH::Vec3 v = toJph(in_body)->GetWorldSpaceSurfaceNormal(
         *toJph(&in_sub_shape_id), loadRVec3(in_position));
     storeVec3(out_normal_vector, v);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_Body*
+JPC_Body_GetFixedToWorld()
+{
+    return toJpc(&JPH::Body::sFixedToWorld);
 }
 //--------------------------------------------------------------------------------------------------
 //

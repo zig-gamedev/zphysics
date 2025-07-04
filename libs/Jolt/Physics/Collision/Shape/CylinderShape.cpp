@@ -11,7 +11,7 @@
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/CollidePointResult.h>
 #include <Jolt/Physics/Collision/TransformedShape.h>
-#include <Jolt/Physics/SoftBody/SoftBodyVertex.h>
+#include <Jolt/Physics/Collision/CollideSoftBodyVertexIterator.h>
 #include <Jolt/Geometry/RayCylinder.h>
 #include <Jolt/ObjectStream/TypeDeclarations.h>
 #include <Jolt/Core/StreamIn.h>
@@ -32,17 +32,16 @@ JPH_IMPLEMENT_SERIALIZABLE_VIRTUAL(CylinderShapeSettings)
 }
 
 // Approximation of top face with 8 vertices
-static const float cSin45 = 0.70710678118654752440084436210485f;
-static const Vec3 cTopFace[] =
+static const Vec3 cCylinderTopFace[] =
 {
-	Vec3(0.0f,		1.0f,	1.0f),
-	Vec3(cSin45,	1.0f,	cSin45),
-	Vec3(1.0f,		1.0f,	0.0f),
-	Vec3(cSin45,	1.0f,	-cSin45),
-	Vec3(-0.0f,		1.0f,	-1.0f),
-	Vec3(-cSin45,	1.0f,	-cSin45),
-	Vec3(-1.0f,		1.0f,	0.0f),
-	Vec3(-cSin45,	1.0f,	cSin45)
+	Vec3(0.0f,			1.0f,	1.0f),
+	Vec3(0.707106769f,	1.0f,	0.707106769f),
+	Vec3(1.0f,			1.0f,	0.0f),
+	Vec3(0.707106769f,	1.0f,	-0.707106769f),
+	Vec3(-0.0f,			1.0f,	-1.0f),
+	Vec3(-0.707106769f,	1.0f,	-0.707106769f),
+	Vec3(-1.0f,			1.0f,	0.0f),
+	Vec3(-0.707106769f,	1.0f,	0.707106769f)
 };
 
 static const StaticArray<Vec3, 96> sUnitCylinderTriangles = []() {
@@ -50,13 +49,13 @@ static const StaticArray<Vec3, 96> sUnitCylinderTriangles = []() {
 
 	const Vec3 bottom_offset(0.0f, -2.0f, 0.0f);
 
-	int num_verts = sizeof(cTopFace) / sizeof(Vec3);
+	int num_verts = sizeof(cCylinderTopFace) / sizeof(Vec3);
 	for (int i = 0; i < num_verts; ++i)
 	{
-		Vec3 t1 = cTopFace[i];
-		Vec3 t2 = cTopFace[(i + 1) % num_verts];
-		Vec3 b1 = cTopFace[i] + bottom_offset;
-		Vec3 b2 = cTopFace[(i + 1) % num_verts] + bottom_offset;
+		Vec3 t1 = cCylinderTopFace[i];
+		Vec3 t2 = cCylinderTopFace[(i + 1) % num_verts];
+		Vec3 b1 = cCylinderTopFace[i] + bottom_offset;
+		Vec3 b2 = cCylinderTopFace[(i + 1) % num_verts] + bottom_offset;
 
 		// Top
 		verts.emplace_back(0.0f, 1.0f, 0.0f);
@@ -201,13 +200,14 @@ void CylinderShape::GetSupportingFace(const SubShapeID &inSubShapeID, Vec3Arg in
 	float scaled_radius = scale_xz * mRadius;
 
 	float x = inDirection.GetX(), y = inDirection.GetY(), z = inDirection.GetZ();
-	float o = sqrt(Square(x) + Square(z));
+	float xz_sq = Square(x) + Square(z);
+	float y_sq = Square(y);
 
-	// If o / |y| > scaled_radius / scaled_half_height, we're hitting the side
-	if (o * scaled_half_height > scaled_radius * abs(y))
+	// Check which component is bigger
+	if (xz_sq > y_sq)
 	{
 		// Hitting side
-		float f = -scaled_radius / o;
+		float f = -scaled_radius / sqrt(xz_sq);
 		float vx = x * f;
 		float vz = z * f;
 		outVertices.push_back(inCenterOfMassTransform * Vec3(vx, scaled_half_height, vz));
@@ -216,9 +216,22 @@ void CylinderShape::GetSupportingFace(const SubShapeID &inSubShapeID, Vec3Arg in
 	else
 	{
 		// Hitting top or bottom
+
+		// When the inDirection is more than 5 degrees from vertical, align the vertices so that 1 of the vertices
+		// points towards inDirection in the XZ plane. This ensures that we always have a vertex towards max penetration depth.
+		Mat44 transform = inCenterOfMassTransform;
+		if (xz_sq > 0.00765427f * y_sq)
+		{
+			Vec4 base_x = Vec4(x, 0, z, 0) / sqrt(xz_sq);
+			Vec4 base_z = base_x.Swizzle<SWIZZLE_Z, SWIZZLE_Y, SWIZZLE_X, SWIZZLE_W>() * Vec4(-1, 0, 1, 0);
+			transform = transform * Mat44(base_x, Vec4(0, 1, 0, 0), base_z, Vec4(0, 0, 0, 1));
+		}
+
+		// Adjust for scale and height
 		Vec3 multiplier = y < 0.0f? Vec3(scaled_radius, scaled_half_height, scaled_radius) : Vec3(-scaled_radius, -scaled_half_height, scaled_radius);
-		Mat44 transform = inCenterOfMassTransform.PreScaled(multiplier);
-		for (const Vec3 &v : cTopFace)
+		transform = transform.PreScaled(multiplier);
+
+		for (const Vec3 &v : cCylinderTopFace)
 			outVertices.push_back(transform * v);
 	}
 }
@@ -301,7 +314,7 @@ void CylinderShape::CollidePoint(Vec3Arg inPoint, const SubShapeIDCreator &inSub
 		ioCollector.AddHit({ TransformedShape::sGetBodyID(ioCollector.GetContext()), inSubShapeIDCreator.GetID() });
 }
 
-void CylinderShape::CollideSoftBodyVertices(Mat44Arg inCenterOfMassTransform, Vec3Arg inScale, SoftBodyVertex *ioVertices, uint inNumVertices, [[maybe_unused]] float inDeltaTime, [[maybe_unused]] Vec3Arg inDisplacementDueToGravity, int inCollidingShapeIndex) const
+void CylinderShape::CollideSoftBodyVertices(Mat44Arg inCenterOfMassTransform, Vec3Arg inScale, const CollideSoftBodyVertexIterator &inVertices, uint inNumVertices, int inCollidingShapeIndex) const
 {
 	JPH_ASSERT(IsValidScale(inScale));
 
@@ -312,10 +325,10 @@ void CylinderShape::CollideSoftBodyVertices(Mat44Arg inCenterOfMassTransform, Ve
 	float half_height = abs_scale.GetY() * mHalfHeight;
 	float radius = abs_scale.GetX() * mRadius;
 
-	for (SoftBodyVertex *v = ioVertices, *sbv_end = ioVertices + inNumVertices; v < sbv_end; ++v)
-		if (v->mInvMass > 0.0f)
+	for (CollideSoftBodyVertexIterator v = inVertices, sbv_end = inVertices + inNumVertices; v != sbv_end; ++v)
+		if (v.GetInvMass() > 0.0f)
 		{
-			Vec3 local_pos = inverse_transform * v->mPosition;
+			Vec3 local_pos = inverse_transform * v.GetPosition();
 
 			// Calculate penetration into side surface
 			Vec3 side_normal = local_pos;
@@ -349,14 +362,8 @@ void CylinderShape::CollideSoftBodyVertices(Mat44Arg inCenterOfMassTransform, Ve
 			// Calculate penetration
 			Plane plane = Plane::sFromPointAndNormal(point, normal);
 			float penetration = -plane.SignedDistance(local_pos);
-			if (penetration > v->mLargestPenetration)
-			{
-				v->mLargestPenetration = penetration;
-
-				// Store collision
-				v->mCollisionPlane = plane.GetTransformed(inCenterOfMassTransform);
-				v->mCollidingShapeIndex = inCollidingShapeIndex;
-			}
+			if (v.UpdatePenetration(penetration))
+				v.SetCollision(plane.GetTransformed(inCenterOfMassTransform), inCollidingShapeIndex);
 		}
 }
 
@@ -391,18 +398,14 @@ void CylinderShape::RestoreBinaryState(StreamIn &inStream)
 
 bool CylinderShape::IsValidScale(Vec3Arg inScale) const
 {
-	// X and Z need same scale
-	Vec3 abs_scale = inScale.Abs();
-	return ConvexShape::IsValidScale(inScale) && abs_scale.Swizzle<SWIZZLE_Z, SWIZZLE_Y, SWIZZLE_X>().IsClose(abs_scale, ScaleHelpers::cScaleToleranceSq);
+	return ConvexShape::IsValidScale(inScale) && ScaleHelpers::IsUniformScaleXZ(inScale.Abs());
 }
 
 Vec3 CylinderShape::MakeScaleValid(Vec3Arg inScale) const
 {
 	Vec3 scale = ScaleHelpers::MakeNonZeroScale(inScale);
 
-	// Average X and Z
-	Vec3 abs_scale = scale.Abs();
-	return 0.5f * scale.GetSign() * (abs_scale + abs_scale.Swizzle<SWIZZLE_Z, SWIZZLE_Y, SWIZZLE_X>());
+	return scale.GetSign() * ScaleHelpers::MakeUniformScaleXZ(scale.Abs());
 }
 
 void CylinderShape::sRegister()

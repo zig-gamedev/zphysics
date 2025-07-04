@@ -61,8 +61,8 @@ typedef float JPC_Real;
 
 #define JPC_BODY_ID_INVALID 0xffffffff
 #define JPC_BODY_ID_INDEX_BITS 0x007fffff
-#define JPC_BODY_ID_SEQUENCE_BITS 0xff000000
-#define JPC_BODY_ID_SEQUENCE_SHIFT 24
+#define JPC_BODY_ID_SEQUENCE_BITS 0x7F800000
+#define JPC_BODY_ID_SEQUENCE_SHIFT 23
 
 #define JPC_SUB_SHAPE_ID_EMPTY 0xffffffff
 
@@ -505,6 +505,7 @@ typedef struct JPC_CharacterSettings
     float mass;
     float friction;
     float gravity_factor;
+    JPC_AllowedDOFs allowed_dofs;
 } JPC_CharacterSettings;
 
 // NOTE: Needs to be kept in sync
@@ -652,7 +653,8 @@ typedef struct JPC_RayCastResult
 // NOTE: Needs to be kept in sync with JPH::RayCastSettings
 typedef struct JPC_RayCastSettings
 {
-    JPC_BackFaceMode back_face_mode;
+    JPC_BackFaceMode back_face_mode_triangles;
+    JPC_BackFaceMode back_face_mode_convex;
     bool             treat_convex_as_solid;
 } JPC_RayCastSettings;
 
@@ -889,13 +891,22 @@ typedef struct JPC_ShapeFilterVTable
     uint32_t bodyId2;
 } JPC_ShapeFilterVTable;
 
+// NOTE: Needs to be kept in sync with JPH::PhysicsStepListenerContext
+typedef struct JPC_PhysicsStepListenerContext
+{
+    float delta_time;
+    bool is_first_step;
+    bool is_last_step;
+    JPC_PhysicsSystem *physics_system;
+} JPC_PhysicsStepListenerContext;
+
 typedef struct JPC_PhysicsStepListenerVTable
 {
     _JPC_VTABLE_HEADER;
 
     // Required, *cannot* be NULL.
     void
-    (*OnStep)(float in_delta_time, JPC_PhysicsSystem *in_physics_system);
+    (*OnStep)(JPC_PhysicsStepListenerContext*);
 } JPC_PhysicsStepListener;
 
 // Made all callbacks required for this one for simplicity's sake, but can be modified to imitate ContactListener later.
@@ -974,6 +985,8 @@ typedef struct JPC_CharacterContactListenerVTable
 
 typedef struct JPC_ContactListenerVTable
 {
+    _JPC_VTABLE_HEADER;
+
     // Optional, can be NULL.
     JPC_ValidateResult
     (*OnContactValidate)(void *in_self,
@@ -1034,6 +1047,10 @@ typedef struct JPC_DebugRendererVTable
                                   uint32_t in_vertex_count,
                                   const uint32_t *in_indices,
                                   uint32_t in_index_count);
+
+    // Optional
+    void
+    (*DestroyTriangleBatch)(void *in_self, const void *in_primitive);
 
     // Required, *cannot* be NULL.
     void
@@ -1318,10 +1335,10 @@ JPC_API void
 JPC_PhysicsSystem_RemoveStepListener(JPC_PhysicsSystem *in_physics_system, void *in_listener);
 
 JPC_API void
-JPC_PhysicsSystem_AddConstraint(JPC_PhysicsSystem *in_physics_system, void *in_two_body_constraint);
+JPC_PhysicsSystem_AddConstraint(JPC_PhysicsSystem *in_physics_system, JPC_Constraint *in_constraint);
 
 JPC_API void
-JPC_PhysicsSystem_RemoveConstraint(JPC_PhysicsSystem *in_physics_system, void *in_two_body_constraint);
+JPC_PhysicsSystem_RemoveConstraint(JPC_PhysicsSystem *in_physics_system, JPC_Constraint *in_constraint);
 
 JPC_API JPC_PhysicsUpdateError
 JPC_PhysicsSystem_Update(JPC_PhysicsSystem *in_physics_system,
@@ -2268,6 +2285,8 @@ JPC_Body_GetWorldSpaceSurfaceNormal(const JPC_Body *in_body,
                                     JPC_SubShapeID in_sub_shape_id,
                                     const JPC_Real in_position[3], // world space
                                     float out_normal_vector[3]);
+JPC_API JPC_Body*
+JPC_Body_GetFixedToWorld();
 //--------------------------------------------------------------------------------------------------
 //
 // JPC_BodyID
