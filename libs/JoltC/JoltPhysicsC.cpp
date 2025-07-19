@@ -739,9 +739,9 @@ public:
         BatchImpl(const JPC_DebugRenderer_Primitive *c_primitive) : RenderPrimitive(c_primitive) {}
         ~BatchImpl()
         {
-            if (sInstance && sInstance->c_renderer->vtbl->DestroyTriangleBatch)
+            if (sInstance)
             {
-                sInstance->c_renderer->vtbl->DestroyTriangleBatch(sInstance->c_renderer, c_primitive);
+                sInstance->c_renderer->vtbl->DestroyTriangleBatch(sInstance->c_renderer, (void*)c_primitive);
             }
         }
 
@@ -790,6 +790,7 @@ public:
         valid &= (c_renderer->vtbl->DrawTriangle               != nullptr);
         valid &= (c_renderer->vtbl->CreateTriangleBatch        != nullptr);
         valid &= (c_renderer->vtbl->CreateTriangleBatchIndexed != nullptr);
+        valid &= (c_renderer->vtbl->DestroyTriangleBatch       != nullptr);
         valid &= (c_renderer->vtbl->DrawGeometry               != nullptr);
         valid &= (c_renderer->vtbl->DrawText3D                 != nullptr);
         return valid ? JPC_DEBUGRENDERER_SUCCESS : JPC_DEBUGRENDERER_INCOMPLETE_IMPL;

@@ -1,5 +1,16 @@
 const std = @import("std");
 
+fn addMacros(module: *std.Build.Module, options: anytype) void {
+    if (options.enable_cross_platform_determinism)
+        module.addCMacro("JPH_CROSS_PLATFORM_DETERMINISTIC", "");
+    if (options.enable_debug_renderer)
+        module.addCMacro("JPH_DEBUG_RENDERER", "");
+    if (options.use_double_precision)
+        module.addCMacro("JPH_DOUBLE_PRECISION", "");
+    if (options.enable_asserts)
+        module.addCMacro("JPH_ENABLE_ASSERTS", "");
+}
+
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
@@ -58,21 +69,18 @@ pub fn build(b: *std.Build) void {
     });
     zjolt.addIncludePath(b.path("libs/JoltC"));
 
-    const joltc = if (options.shared) blk: {
-        const lib = b.addSharedLibrary(.{
-            .name = "joltc",
+    const joltc = b.addLibrary(.{
+        .name = "joltc",
+        .linkage = if (options.shared) .dynamic else .static,
+        .root_module = b.createModule(.{
             .target = target,
             .optimize = optimize,
-        });
-        if (target.result.os.tag == .windows) {
-            lib.root_module.addCMacro("JPC_API", "extern __declspec(dllexport)");
-        }
-        break :blk lib;
-    } else b.addStaticLibrary(.{
-        .name = "joltc",
-        .target = target,
-        .optimize = optimize,
+        }),
     });
+
+    if (options.shared and target.result.os.tag == .windows)
+        joltc.root_module.addCMacro("JPC_API", "extern __declspec(dllexport)");
+
     b.installArtifact(joltc);
 
     joltc.addIncludePath(b.path("libs"));
@@ -87,15 +95,12 @@ pub fn build(b: *std.Build) void {
     const src_dir = "libs/Jolt";
     const c_flags = &.{
         "-std=c++17",
-        if (options.enable_cross_platform_determinism) "-DJPH_CROSS_PLATFORM_DETERMINISTIC" else "",
-        if (options.enable_debug_renderer) "-DJPH_DEBUG_RENDERER" else "",
-        if (options.use_double_precision) "-DJPH_DOUBLE_PRECISION" else "",
-        if (options.enable_asserts) "-DJPH_ENABLE_ASSERTS" else "",
         if (options.no_exceptions) "-fno-exceptions" else "",
         "-fno-access-control",
         "-fno-sanitize=undefined",
     };
 
+    addMacros(joltc.root_module, options);
     joltc.addCSourceFiles(.{
         .files = &.{
             "libs/JoltC/JoltPhysicsC.cpp",
@@ -248,9 +253,11 @@ pub fn build(b: *std.Build) void {
 
     const tests = b.addTest(.{
         .name = "zphysics-tests",
-        .root_source_file = b.path("src/zphysics.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/zphysics.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     b.installArtifact(tests);
 
@@ -259,16 +266,16 @@ pub fn build(b: *std.Build) void {
         tests.want_lto = false;
     }
 
+    addMacros(tests.root_module, options);
     tests.addCSourceFile(.{
         .file = b.path("libs/JoltC/JoltPhysicsC_Tests.c"),
         .flags = &.{
-            if (options.enable_cross_platform_determinism) "-DJPH_CROSS_PLATFORM_DETERMINISTIC" else "",
-            if (options.enable_debug_renderer) "-DJPH_DEBUG_RENDERER" else "",
-            if (options.use_double_precision) "-DJPH_DOUBLE_PRECISION" else "",
-            if (options.enable_asserts) "-DJPH_ENABLE_ASSERTS" else "",
             "-fno-sanitize=undefined",
         },
     });
+
+    if (b.option(bool, "verbose", "Print verbose test debug output to stderr") orelse false)
+        tests.root_module.addCMacro("PRINT_OUTPUT", "");
 
     tests.root_module.addImport("zphysics_options", options_module);
     tests.addIncludePath(b.path("libs/JoltC"));

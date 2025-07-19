@@ -5,8 +5,6 @@
 #include <stdio.h>
 #include <string.h>
 
-//#define PRINT_OUTPUT
-
 // Object layers
 #define NUM_OBJ_LAYERS 2
 #define OBJ_LAYER_NON_MOVING 0
@@ -97,9 +95,9 @@ MyContactListener_OnContactValidate(void *in_self,
             "\tOnContactValidate(): in_base_offset (%f, %f, %f)\n",
             in_base_offset[0], in_base_offset[1], in_base_offset[2]);
     fprintf(stderr, "\tOnContactValidate(): penetration_depth (%f)\n", in_collision_result->penetration_depth);
-    fprintf(stderr, "\tOnContactValidate(): shape1_sub_shape_id (%d)\n", in_collision_result->shape1_sub_shape_id);
-    fprintf(stderr, "\tOnContactValidate(): shape2_sub_shape_id (%d)\n", in_collision_result->shape2_sub_shape_id);
-    fprintf(stderr, "\tOnContactValidate(): body2_id (%d)\n", in_collision_result->body2_id);
+    fprintf(stderr, "\tOnContactValidate(): shape1_sub_shape_id (%d)\n", in_collision_result->shape1_sub_shape_id.id);
+    fprintf(stderr, "\tOnContactValidate(): shape2_sub_shape_id (%d)\n", in_collision_result->shape2_sub_shape_id.id);
+    fprintf(stderr, "\tOnContactValidate(): body2_id (%d)\n", in_collision_result->body2_id.id);
 #endif
     return JPC_VALIDATE_RESULT_ACCEPT_ALL_CONTACTS;
 }
@@ -214,7 +212,7 @@ MyDebugRenderer_CreateTriangleBatch(void *in_self,
         (JPC_DebugRenderer_Primitive *)prim
         );
 #ifdef PRINT_OUTPUT
-    fprintf(stderr, "\tDebugRenderer: CreateTriangleBatch called. Created primitive %x\n", prim);
+    fprintf(stderr, "\tDebugRenderer: CreateTriangleBatch called. Created primitive %llx\n", (uint64_t)prim);
 #endif
     return batch;
 }
@@ -232,9 +230,19 @@ MyDebugRenderer_CreateTriangleBatchIndexed(void *in_self,
         (JPC_DebugRenderer_Primitive *)prim
         );
 #ifdef PRINT_OUTPUT
-    fprintf(stderr, "\tDebugRenderer: CreateTriangleBatchIndexed called. Created primitive %x\n", prim);
+    fprintf(stderr, "\tDebugRenderer: CreateTriangleBatchIndexed called. Created primitive %llx\n", (uint64_t)prim);
 #endif
     return batch;
+}
+
+static void
+MyDebugRenderer_DestroyTriangleBatch(void *in_self, void *in_batch)
+{
+    struct MyDebugRenderer *self = (struct MyDebugRenderer*) in_self;
+    struct MyRenderPrimitive *prim = (MyRenderPrimitive*)in_batch;
+#ifdef PRINT_OUTPUT
+    fprintf(stderr, "\tDebugRenderer: DestroyTriangleBatch called. Destroyed primitive %llx\n", (uint64_t)prim);
+#endif
 }
 
 static void
@@ -252,7 +260,7 @@ MyDebugRenderer_DrawGeometry(void *in_self,
     JPC_DebugRenderer_TriangleBatch *batch = in_geometry->LODs[0].batch;
     const JPC_DebugRenderer_Primitive *prim = JPC_DebugRenderer_TriangleBatch_GetPrimitive(batch);
 #ifdef PRINT_OUTPUT
-    fprintf(stderr, "\tDebugRenderer: DrawGeometry called for %x\n", prim);
+    fprintf(stderr, "\tDebugRenderer: DrawGeometry called for %llx\n", (uint64_t)prim);
 #endif
 }
 
@@ -277,6 +285,7 @@ MyDebugRenderer_Init(void)
               .DrawTriangle = MyDebugRenderer_DrawTriangle,
               .CreateTriangleBatch = MyDebugRenderer_CreateTriangleBatch,
               .CreateTriangleBatchIndexed = MyDebugRenderer_CreateTriangleBatchIndexed,
+              .DestroyTriangleBatch = MyDebugRenderer_DestroyTriangleBatch,
               .DrawGeometry = MyDebugRenderer_DrawGeometry,
               .DrawText3D = MyDebugRenderer_DrawText3D,
         };

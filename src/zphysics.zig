@@ -109,27 +109,75 @@ pub fn RefTargetHeader(comptime first_field_align: u29) type {
     };
 }
 
+fn initInterface(comptime T: type, comptime VTableT: type) *const VTableT {
+    const vtable_final = comptime blk: {
+        const vtable_info = @typeInfo(VTableT);
+        if (vtable_info != .@"struct" or vtable_info.@"struct".layout != .@"extern")
+            @compileError("vtable struct " ++ @typeName(VTableT) ++ " must be extern");
+
+        var vtable: VTableT = undefined;
+        for (vtable_info.@"struct".fields) |field| {
+            const field_info = @typeInfo(field.type);
+
+            var is_opt = false;
+            const opt_fn_info: ?std.builtin.Type.Fn = unbox: switch (field_info) {
+                .optional => |o| {
+                    is_opt = true;
+                    continue :unbox @typeInfo(o.child);
+                },
+                .pointer => |p| continue :unbox @typeInfo(p.child),
+                .@"fn" => |f| f,
+                else => null,
+            };
+
+            if (opt_fn_info) |fn_info| {
+                if (is_opt)
+                    @compileError("vtable function pointer " ++ field.name ++ " must be non-optional");
+
+                if (!fn_info.calling_convention.eql(std.builtin.CallingConvention.c))
+                    @compileError("vtable function pointer " ++ field.name ++ " must be callconv(.c)");
+
+                if (@hasDecl(T, field.name)) {
+                    @field(vtable, field.name) = &@field(T, field.name);
+                } else {
+                    if (is_opt) {
+                        @field(vtable, field.name) = null;
+                    } else {
+                        @compileError(@typeName(T) ++ " is missing `pub fn " ++ field.name ++ "`: " ++ @typeName(@TypeOf(@field(vtable, field.name))));
+                    }
+                }
+            } else {
+                if (field.default_value_ptr) |default_value_ptr| {
+                    @field(vtable, field.name) = @as(*const field.type, @alignCast(@ptrCast(default_value_ptr))).*;
+                } else @compileError("non-pointer vtable field " ++ field.name ++ " must have a default value");
+            }
+        }
+        break :blk vtable;
+    };
+
+    return &vtable_final;
+}
+
 pub const StreamOut = extern struct {
     __v: *const VTable,
 
-    pub fn Methods(comptime T: type) type {
-        return extern struct {
-            pub inline fn writeBytes(self: *T, data: [*]const u8, num_bytes: usize) u32 {
-                return @as(*StreamOut.VTable, @ptrCast(self.__v))
-                    .writeBytes(@as(*StreamOut, @ptrCast(self)), data, num_bytes);
-            }
-            pub inline fn isFailed(self: *const T) bool {
-                return @as(*const StreamOut.VTable, @ptrCast(self.__v))
-                    .isFailed(@as(*const StreamOut, @ptrCast(self)));
-            }
-        };
+    const VTable = extern struct {
+        __header: VTableHeader = .{},
+        writeBytes: *const fn (self: *StreamOut, data: [*]const u8, num_bytes: usize) callconv(.c) void,
+        isFailed: *const fn (self: *StreamOut) callconv(.c) bool,
+    };
+
+    pub fn init(comptime T: type) StreamOut {
+        return .{ .__v = initInterface(T, VTable) };
     }
 
-    pub const VTable = extern struct {
-        __header: VTableHeader = .{},
-        writeBytes: *const fn (self: *StreamOut, data: [*]const u8, num_bytes: usize) callconv(.C) void,
-        isFailed: *const fn (self: *StreamOut) callconv(.C) bool,
-    };
+    pub fn writeBytes(self: *StreamOut, data: [*]const u8, num_bytes: usize) void {
+        self.__v.writeBytes(self, data, num_bytes);
+    }
+
+    pub fn isFailed(self: *StreamOut) bool {
+        return self.__v.isFailed(self);
+    }
 
     comptime {
         assert(@sizeOf(VTable) == @sizeOf(c.JPC_StreamOutVTable));
@@ -137,29 +185,23 @@ pub const StreamOut = extern struct {
 };
 
 pub const AnyWriterStreamOut = extern struct {
-    usingnamespace StreamOut.Methods(@This());
-    __v: *const StreamOut.VTable = &vtable,
+    stream_out: StreamOut = .init(@This()),
     writer: *const std.io.AnyWriter,
     failed: bool = false,
-
-    const vtable = StreamOut.VTable{
-        .writeBytes = _writeBytes,
-        .isFailed = _isFailed,
-    };
 
     pub fn init(writer: *const std.io.AnyWriter) AnyWriterStreamOut {
         return .{ .writer = writer };
     }
 
-    fn _writeBytes(iself: *StreamOut, data: [*]const u8, num_bytes: usize) callconv(.C) void {
-        const self = @as(*AnyWriterStreamOut, @ptrCast(iself));
+    pub fn writeBytes(stream_out: *StreamOut, data: [*]const u8, num_bytes: usize) callconv(.c) void {
+        const self: *AnyWriterStreamOut = @alignCast(@fieldParentPtr("stream_out", stream_out));
         self.writer.writeAll(data[0..num_bytes]) catch {
             self.failed = true;
         };
     }
 
-    fn _isFailed(iself: *StreamOut) callconv(.C) bool {
-        const self = @as(*AnyWriterStreamOut, @ptrCast(iself));
+    pub fn isFailed(stream_out: *StreamOut) callconv(.c) bool {
+        const self: *AnyWriterStreamOut = @alignCast(@fieldParentPtr("stream_out", stream_out));
         return self.failed;
     }
 };
@@ -167,29 +209,16 @@ pub const AnyWriterStreamOut = extern struct {
 pub const StreamIn = extern struct {
     __v: *const VTable,
 
-    pub fn Methods(comptime T: type) type {
-        return extern struct {
-            pub inline fn readBytes(self: *T, data: [*]u8, num_bytes: usize) u32 {
-                return @as(*StreamIn.VTable, @ptrCast(self.__v))
-                    .readBytes(@as(*StreamIn, @ptrCast(self)), data, num_bytes);
-            }
-            pub inline fn isEOF(self: *const T) bool {
-                return @as(*const StreamIn.VTable, @ptrCast(self.__v))
-                    .isEof(@as(*const StreamIn, @ptrCast(self)));
-            }
-            pub inline fn isFailed(self: *const T) bool {
-                return @as(*const StreamIn.VTable, @ptrCast(self.__v))
-                    .isFailed(@as(*const StreamIn, @ptrCast(self)));
-            }
-        };
-    }
-
     pub const VTable = extern struct {
         __header: VTableHeader = .{},
-        readBytes: *const fn (self: *StreamIn, data: [*]u8, num_bytes: usize) callconv(.C) void,
-        isEof: *const fn (self: *StreamIn) callconv(.C) bool,
-        isFailed: *const fn (self: *StreamIn) callconv(.C) bool,
+        readBytes: *const fn (self: *StreamIn, data: [*]u8, num_bytes: usize) callconv(.c) void,
+        isEof: *const fn (self: *StreamIn) callconv(.c) bool,
+        isFailed: *const fn (self: *StreamIn) callconv(.c) bool,
     };
+
+    pub fn init(comptime T: type) StreamIn {
+        return .{ .__v = initInterface(T, VTable) };
+    }
 
     comptime {
         assert(@sizeOf(VTable) == @sizeOf(c.JPC_StreamInVTable));
@@ -197,37 +226,30 @@ pub const StreamIn = extern struct {
 };
 
 pub const AnyReaderStreamIn = extern struct {
-    usingnamespace StreamIn.Methods(@This());
-    __v: *const StreamIn.VTable = &vtable,
+    stream_in: StreamIn = .init(@This()),
     reader: *const std.io.AnyReader,
     failed: bool = false,
     eof: bool = false,
-
-    const vtable = StreamIn.VTable{
-        .readBytes = _readBytes,
-        .isEof = _isEof,
-        .isFailed = _isFailed,
-    };
 
     pub fn init(reader: *const std.io.AnyReader) AnyReaderStreamIn {
         return .{ .reader = reader };
     }
 
-    fn _readBytes(iself: *StreamIn, data: [*]u8, num_bytes: usize) callconv(.C) void {
-        const self = @as(*AnyReaderStreamIn, @ptrCast(iself));
+    pub fn readBytes(stream_in: *StreamIn, data: [*]u8, num_bytes: usize) callconv(.c) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("stream_in", stream_in));
         self.reader.readNoEof(data[0..num_bytes]) catch |err| switch (err) {
             error.EndOfStream => self.eof = true,
             else => self.failed = true,
         };
     }
 
-    fn _isEof(iself: *StreamIn) callconv(.C) bool {
-        const self = @as(*AnyReaderStreamIn, @ptrCast(iself));
+    pub fn isEof(stream_in: *StreamIn) callconv(.c) bool {
+        const self: *@This() = @alignCast(@fieldParentPtr("stream_in", stream_in));
         return self.eof;
     }
 
-    fn _isFailed(iself: *StreamIn) callconv(.C) bool {
-        const self = @as(*AnyReaderStreamIn, @ptrCast(iself));
+    pub fn isFailed(stream_in: *StreamIn) callconv(.c) bool {
+        const self: *@This() = @alignCast(@fieldParentPtr("stream_in", stream_in));
         return self.failed;
     }
 };
@@ -235,35 +257,24 @@ pub const AnyReaderStreamIn = extern struct {
 pub const BroadPhaseLayerInterface = extern struct {
     __v: *const VTable,
 
-    pub usingnamespace Methods(@This());
-
-    pub fn Methods(comptime T: type) type {
-        return extern struct {
-            pub inline fn getNumBroadPhaseLayers(self: *const T) u32 {
-                return @as(*const BroadPhaseLayerInterface.VTable, @ptrCast(self.__v))
-                    .getNumBroadPhaseLayers(@as(*const BroadPhaseLayerInterface, @ptrCast(self)));
-            }
-            pub inline fn getBroadPhaseLayer(self: *const T, layer: ObjectLayer) u32 {
-                return @as(*const BroadPhaseLayerInterface.VTable, @ptrCast(self.__v))
-                    .getBroadPhaseLayer(@as(*const BroadPhaseLayerInterface, @ptrCast(self)), layer);
-            }
-        };
+    pub fn init(comptime T: type) BroadPhaseLayerInterface {
+        return .{ .__v = initInterface(T, VTable) };
     }
 
     pub const VTable = extern struct {
         __header: VTableHeader = .{},
-        getNumBroadPhaseLayers: *const fn (self: *const BroadPhaseLayerInterface) callconv(.C) u32,
+        getNumBroadPhaseLayers: *const fn (self: *const BroadPhaseLayerInterface) callconv(.c) u32,
         getBroadPhaseLayer: if (@import("builtin").abi == .msvc)
             *const fn (
                 self: *const BroadPhaseLayerInterface,
                 out_layer: *BroadPhaseLayer,
                 layer: ObjectLayer,
-            ) callconv(.C) *const BroadPhaseLayer
+            ) callconv(.c) *const BroadPhaseLayer
         else
             *const fn (
                 self: *const BroadPhaseLayerInterface,
                 layer: ObjectLayer,
-            ) callconv(.C) BroadPhaseLayer,
+            ) callconv(.c) BroadPhaseLayer,
     };
 
     comptime {
@@ -278,15 +289,8 @@ pub const BroadPhaseLayerInterface = extern struct {
 pub const ObjectVsBroadPhaseLayerFilter = extern struct {
     __v: *const VTable,
 
-    pub usingnamespace Methods(@This());
-
-    pub fn Methods(comptime T: type) type {
-        return extern struct {
-            pub inline fn shouldCollide(self: *const T, layer1: ObjectLayer, layer2: BroadPhaseLayer) bool {
-                return @as(*const ObjectVsBroadPhaseLayerFilter.VTable, @ptrCast(self.__v))
-                    .shouldCollide(@as(*const ObjectVsBroadPhaseLayerFilter, @ptrCast(self)), layer1, layer2);
-            }
-        };
+    pub fn init(comptime T: type) ObjectVsBroadPhaseLayerFilter {
+        return .{ .__v = initInterface(T, VTable) };
     }
 
     pub const VTable = extern struct {
@@ -295,7 +299,7 @@ pub const ObjectVsBroadPhaseLayerFilter = extern struct {
             self: *const ObjectVsBroadPhaseLayerFilter,
             layer1: ObjectLayer,
             layer2: BroadPhaseLayer,
-        ) callconv(.C) bool,
+        ) callconv(.c) bool,
     };
 
     comptime {
@@ -310,15 +314,8 @@ pub const ObjectVsBroadPhaseLayerFilter = extern struct {
 pub const BroadPhaseLayerFilter = extern struct {
     __v: *const VTable,
 
-    pub usingnamespace Methods(@This());
-
-    pub fn Methods(comptime T: type) type {
-        return extern struct {
-            pub inline fn shouldCollide(self: *const T, layer: BroadPhaseLayer) bool {
-                return @as(*const BroadPhaseLayerFilter.VTable, @ptrCast(self.__v))
-                    .shouldCollide(@as(*const BroadPhaseLayerFilter, @ptrCast(self)), layer);
-            }
-        };
+    pub fn init(comptime T: type) BroadPhaseLayerFilter {
+        return .{ .__v = initInterface(T, VTable) };
     }
 
     pub const VTable = extern struct {
@@ -326,7 +323,7 @@ pub const BroadPhaseLayerFilter = extern struct {
         shouldCollide: *const fn (
             self: *const BroadPhaseLayerFilter,
             layer: BroadPhaseLayer,
-        ) callconv(.C) bool,
+        ) callconv(.c) bool,
     };
 
     comptime {
@@ -340,20 +337,13 @@ pub const BroadPhaseLayerFilter = extern struct {
 pub const ObjectLayerPairFilter = extern struct {
     __v: *const VTable,
 
-    pub usingnamespace Methods(@This());
-
-    pub fn Methods(comptime T: type) type {
-        return extern struct {
-            pub inline fn shouldCollide(self: *const T, layer1: ObjectLayer, layer2: ObjectLayer) bool {
-                return @as(*const ObjectLayerPairFilter.VTable, @ptrCast(self.__v))
-                    .shouldCollide(@as(*const ObjectLayerPairFilter, @ptrCast(self)), layer1, layer2);
-            }
-        };
+    pub fn init(comptime T: type) ObjectLayerPairFilter {
+        return .{ .__v = initInterface(T, VTable) };
     }
 
     pub const VTable = extern struct {
         __header: VTableHeader = .{},
-        shouldCollide: *const fn (self: *const ObjectLayerPairFilter, ObjectLayer, ObjectLayer) callconv(.C) bool,
+        shouldCollide: *const fn (self: *const ObjectLayerPairFilter, ObjectLayer, ObjectLayer) callconv(.c) bool,
     };
 
     comptime {
@@ -367,20 +357,13 @@ pub const ObjectLayerPairFilter = extern struct {
 pub const ObjectLayerFilter = extern struct {
     __v: *const VTable,
 
-    pub usingnamespace Methods(@This());
-
-    pub fn Methods(comptime T: type) type {
-        return extern struct {
-            pub inline fn shouldCollide(self: *const T, layer: ObjectLayer) bool {
-                return @as(*const ObjectLayerFilter.VTable, @ptrCast(self.__v))
-                    .shouldCollide(@as(*const ObjectLayerFilter, @ptrCast(self)), layer);
-            }
-        };
+    pub fn init(comptime T: type) ObjectLayerFilter {
+        return .{ .__v = initInterface(T, VTable) };
     }
 
     pub const VTable = extern struct {
         __header: VTableHeader = .{},
-        shouldCollide: *const fn (self: *const ObjectLayerFilter, ObjectLayer) callconv(.C) bool,
+        shouldCollide: *const fn (self: *const ObjectLayerFilter, ObjectLayer) callconv(.c) bool,
     };
 
     comptime {
@@ -399,20 +382,13 @@ pub const PhysicsStepListenerContext = extern struct {
 pub const PhysicsStepListener = extern struct {
     __v: *const VTable,
 
-    pub usingnamespace Methods(@This());
-
-    pub fn Methods(comptime T: type) type {
-        return extern struct {
-            pub inline fn onStep(self: *const T, context: *const PhysicsStepListenerContext) void {
-                return @as(*const PhysicsStepListener.VTable, @ptrCast(self.__v))
-                    .onStep(@as(*PhysicsStepListener, @ptrCast(self)), context);
-            }
-        };
+    pub fn init(comptime T: type) PhysicsStepListener {
+        return .{ .__v = initInterface(T, VTable) };
     }
 
     pub const VTable = extern struct {
         __header: VTableHeader = .{},
-        onStep: *const fn (self: *PhysicsStepListener, *const PhysicsStepListenerContext) callconv(.C) void,
+        onStep: *const fn (self: *PhysicsStepListener, *const PhysicsStepListenerContext) callconv(.c) void,
     };
 
     comptime {
@@ -424,27 +400,8 @@ pub const PhysicsStepListener = extern struct {
 pub const BodyActivationListener = extern struct {
     __v: *const VTable,
 
-    pub usingnamespace Methods(@This());
-
-    pub fn Methods(comptime T: type) type {
-        return extern struct {
-            pub inline fn onBodyActivated(
-                self: *T,
-                body_id: *const BodyId,
-                user_data: u64,
-            ) void {
-                @as(*const BodyActivationListener.VTable, @ptrCast(self.__v))
-                    .onBodyActivated(@as(*const BodyActivationListener, @ptrCast(self)), body_id, user_data);
-            }
-            pub inline fn onBodyDeactivated(
-                self: *T,
-                body_id: *const BodyId,
-                user_data: u64,
-            ) void {
-                @as(*const BodyActivationListener.VTable, @ptrCast(self.__v))
-                    .onBodyDeactivated(@as(*const BodyActivationListener, @ptrCast(self)), body_id, user_data);
-            }
-        };
+    pub fn init(comptime T: type) BodyActivationListener {
+        return .{ .__v = initInterface(T, VTable) };
     }
 
     pub const VTable = extern struct {
@@ -453,12 +410,12 @@ pub const BodyActivationListener = extern struct {
             self: *BodyActivationListener,
             body_id: *const BodyId,
             user_data: u64,
-        ) callconv(.C) void,
+        ) callconv(.c) void,
         onBodyDeactivated: *const fn (
             self: *BodyActivationListener,
             body_id: *const BodyId,
             user_data: u64,
-        ) callconv(.C) void,
+        ) callconv(.c) void,
     };
 
     comptime {
@@ -473,140 +430,8 @@ pub const BodyActivationListener = extern struct {
 pub const CharacterContactListener = extern struct {
     __v: *const VTable,
 
-    pub usingnamespace Methods(@This());
-
-    pub fn Methods(comptime T: type) type {
-        return extern struct {
-            pub inline fn OnAdjustBodyVelocity(
-                self: *const T,
-                character: *const CharacterVirtual,
-                body: *const Body,
-                io_linear_velocity: *[3]f32,
-                io_angular_velocity: *[3]f32,
-            ) void {
-                return @as(*const CharacterContactListener.VTable, @ptrCast(self.__v)).OnAdjustBodyVelocity(
-                    @as(*CharacterContactListener, @ptrCast(self)),
-                    character,
-                    body,
-                    io_linear_velocity,
-                    io_angular_velocity,
-                );
-            }
-            pub inline fn OnContactValidate(
-                self: *const T,
-                character: *const CharacterVirtual,
-                body: *const Body,
-                sub_shape_id: *const SubShapeId,
-            ) bool {
-                return @as(*const CharacterContactListener.VTable, @ptrCast(self.__v)).OnContactValidate(
-                    @as(*CharacterContactListener, @ptrCast(self)),
-                    character,
-                    body,
-                    sub_shape_id,
-                );
-            }
-            pub inline fn OnCharacterContactValidate(
-                self: *const T,
-                character: *const CharacterVirtual,
-                other_character: *const CharacterVirtual,
-                sub_shape_id: *const SubShapeId,
-            ) bool {
-                return @as(*const CharacterContactListener.VTable, @ptrCast(self.__v)).OnCharacterContactValidate(
-                    @as(*CharacterContactListener, @ptrCast(self)),
-                    character,
-                    other_character,
-                    sub_shape_id,
-                );
-            }
-            pub inline fn OnContactAdded(
-                self: *const T,
-                character: *const CharacterVirtual,
-                body: *const Body,
-                sub_shape_id: *const SubShapeId,
-                contact_position: *const [3]Real,
-                contact_normal: *const [3]f32,
-                io_settings: *CharacterContactSettings,
-            ) void {
-                return @as(*const CharacterContactListener.VTable, @ptrCast(self.__v)).OnContactAdded(
-                    @as(*CharacterContactListener, @ptrCast(self)),
-                    character,
-                    body,
-                    sub_shape_id,
-                    contact_position,
-                    contact_normal,
-                    io_settings,
-                );
-            }
-            pub inline fn OnCharacterContactAdded(
-                self: *const T,
-                character: *const CharacterVirtual,
-                other_character: *const CharacterVirtual,
-                sub_shape_id: *const SubShapeId,
-                contact_position: *const [3]Real,
-                contact_normal: *const [3]f32,
-                io_settings: *CharacterContactSettings,
-            ) void {
-                return @as(*const CharacterContactListener.VTable, @ptrCast(self.__v)).OnCharacterContactAdded(
-                    @as(*CharacterContactListener, @ptrCast(self)),
-                    character,
-                    other_character,
-                    sub_shape_id,
-                    contact_position,
-                    contact_normal,
-                    io_settings,
-                );
-            }
-            pub inline fn OnContactSolve(
-                self: *const T,
-                character: *const CharacterVirtual,
-                body: *const Body,
-                sub_shape_id: *const SubShapeId,
-                contact_position: *const [3]Real,
-                contact_normal: *const [3]f32,
-                contact_velocity: *const [3]f32,
-                contact_material: *const Material,
-                character_velocity: *const [3]f32,
-                character_velocity_out: *[3]f32,
-            ) void {
-                return @as(*const CharacterContactListener.VTable, @ptrCast(self.__v)).OnContactSolve(
-                    @as(*CharacterContactListener, @ptrCast(self)),
-                    character,
-                    body,
-                    sub_shape_id,
-                    contact_position,
-                    contact_normal,
-                    contact_velocity,
-                    contact_material,
-                    character_velocity,
-                    character_velocity_out,
-                );
-            }
-            pub inline fn OnCharacterContactSolve(
-                self: *const T,
-                character: *const CharacterVirtual,
-                other_character: *const CharacterVirtual,
-                sub_shape_id: *const SubShapeId,
-                contact_position: *const [3]Real,
-                contact_normal: *const [3]f32,
-                contact_velocity: *const [3]f32,
-                contact_material: *const Material,
-                character_velocity: *const [3]f32,
-                character_velocity_out: *[3]f32,
-            ) void {
-                return @as(*const CharacterContactListener.VTable, @ptrCast(self.__v)).OnCharacterContactSolve(
-                    @as(*CharacterContactListener, @ptrCast(self)),
-                    character,
-                    other_character,
-                    sub_shape_id,
-                    contact_position,
-                    contact_normal,
-                    contact_velocity,
-                    contact_material,
-                    character_velocity,
-                    character_velocity_out,
-                );
-            }
-        };
+    pub fn init(comptime T: type) CharacterContactListener {
+        return .{ .__v = initInterface(T, VTable) };
     }
 
     pub const VTable = extern struct {
@@ -617,19 +442,19 @@ pub const CharacterContactListener = extern struct {
             body: *const Body,
             io_linear_velocity: *[3]f32,
             io_angular_velocity: *[3]f32,
-        ) callconv(.C) void,
+        ) callconv(.c) void,
         OnContactValidate: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
             body: *const Body,
             sub_shape_id: *const SubShapeId,
-        ) callconv(.C) bool,
+        ) callconv(.c) bool,
         OnCharacterContactValidate: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
             other_character: *const CharacterVirtual,
             sub_shape_id: *const SubShapeId,
-        ) callconv(.C) bool,
+        ) callconv(.c) bool,
         OnContactAdded: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
@@ -638,7 +463,7 @@ pub const CharacterContactListener = extern struct {
             contact_position: *const [3]Real,
             contact_normal: *const [3]f32,
             io_settings: *CharacterContactSettings,
-        ) callconv(.C) void,
+        ) callconv(.c) void,
         OnCharacterContactAdded: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
@@ -647,7 +472,7 @@ pub const CharacterContactListener = extern struct {
             contact_position: *const [3]Real,
             contact_normal: *const [3]f32,
             io_settings: *CharacterContactSettings,
-        ) callconv(.C) void,
+        ) callconv(.c) void,
         OnContactSolve: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
@@ -659,7 +484,7 @@ pub const CharacterContactListener = extern struct {
             contact_material: *const Material,
             character_velocity: *const [3]f32,
             character_velocity_out: *[3]f32,
-        ) callconv(.C) void,
+        ) callconv(.c) void,
         OnCharacterContactSolve: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
@@ -671,7 +496,7 @@ pub const CharacterContactListener = extern struct {
             contact_material: *const Material,
             character_velocity: *const [3]f32,
             character_velocity_out: *[3]f32,
-        ) callconv(.C) void,
+        ) callconv(.c) void,
     };
 
     comptime {
@@ -684,86 +509,37 @@ pub const CharacterContactListener = extern struct {
 pub const ContactListener = extern struct {
     __v: *const VTable,
 
-    pub usingnamespace Methods(@This());
-
-    pub fn Methods(comptime T: type) type {
-        return extern struct {
-            pub inline fn onContactValidate(
-                self: *T,
-                body1: *const Body,
-                body2: *const Body,
-                base_offset: *const [3]Real,
-                collision_result: *const CollideShapeResult,
-            ) ValidateResult {
-                return @as(*const ContactListener.VTable, @ptrCast(self.__v))
-                    .onContactValidate(
-                    @as(*const ContactListener, @ptrCast(self)),
-                    body1,
-                    body2,
-                    base_offset,
-                    collision_result,
-                );
-            }
-            pub inline fn onContactAdded(
-                self: *T,
-                body1: *const Body,
-                body2: *const Body,
-                manifold: *const ContactManifold,
-                settings: *ContactSettings,
-            ) void {
-                @as(*const ContactListener.VTable, @ptrCast(self.__v))
-                    .onContactAdded(@as(*const ContactListener, @ptrCast(self)), body1, body2, manifold, settings);
-            }
-            pub inline fn onContactPersisted(
-                self: *T,
-                body1: *const Body,
-                body2: *const Body,
-                manifold: *const ContactManifold,
-                settings: *ContactSettings,
-            ) void {
-                @as(*const ContactListener.VTable, @ptrCast(self.__v))
-                    .onContactPersisted(@as(*const ContactListener, @ptrCast(self)), body1, body2, manifold, settings);
-            }
-            pub inline fn onContactRemoved(
-                self: *T,
-                sub_shape_pair: *const SubShapeIdPair,
-            ) void {
-                @as(*const ContactListener.VTable, @ptrCast(self.__v))
-                    .onContactRemoved(@as(*const ContactListener, @ptrCast(self)), sub_shape_pair);
-            }
-        };
+    pub fn init(comptime T: type) ContactListener {
+        return .{ .__v = initInterface(T, VTable) };
     }
 
     pub const VTable = extern struct {
         __header: VTableHeader = .{},
-        onContactValidate: ?*const fn (
+        onContactValidate: *const fn (
             self: *ContactListener,
             body1: *const Body,
             body2: *const Body,
             base_offset: *const [3]Real,
             collision_result: *const CollideShapeResult,
-        ) callconv(.C) ValidateResult = null,
-
-        onContactAdded: ?*const fn (
+        ) callconv(.c) ValidateResult,
+        onContactAdded: *const fn (
             self: *ContactListener,
             body1: *const Body,
             body2: *const Body,
             manifold: *const ContactManifold,
             settings: *ContactSettings,
-        ) callconv(.C) void = null,
-
-        onContactPersisted: ?*const fn (
+        ) callconv(.c) void,
+        onContactPersisted: *const fn (
             self: *ContactListener,
             body1: *const Body,
             body2: *const Body,
             manifold: *const ContactManifold,
             settings: *ContactSettings,
-        ) callconv(.C) void = null,
-
-        onContactRemoved: ?*const fn (
+        ) callconv(.c) void,
+        onContactRemoved: *const fn (
             self: *ContactListener,
             sub_shape_pair: *const SubShapeIdPair,
-        ) callconv(.C) void = null,
+        ) callconv(.c) void,
     };
 
     comptime {
@@ -781,25 +557,14 @@ pub const ContactListener = extern struct {
 pub const BodyFilter = extern struct {
     __v: *const VTable,
 
-    pub usingnamespace Methods(@This());
-
-    pub fn Methods(comptime T: type) type {
-        return extern struct {
-            pub inline fn shouldCollide(self: *const T, body_id: *const BodyId) bool {
-                return @as(*const BodyFilter.VTable, @ptrCast(self.__v))
-                    .shouldCollide(@as(*const BodyFilter, @ptrCast(self)), body_id);
-            }
-            pub inline fn shouldCollideLocked(self: *const T, body: *const Body) bool {
-                return @as(*const BodyFilter.VTable, @ptrCast(self.__v))
-                    .shouldCollideLocked(@as(*const BodyFilter, @ptrCast(self)), body);
-            }
-        };
+    pub fn init(comptime T: type) BodyFilter {
+        return .{ .__v = initInterface(T, VTable) };
     }
 
     pub const VTable = extern struct {
         __header: VTableHeader = .{},
-        shouldCollide: *const fn (self: *const BodyFilter, body_id: *const BodyId) callconv(.C) bool,
-        shouldCollideLocked: *const fn (self: *const BodyFilter, body: *const Body) callconv(.C) bool,
+        shouldCollide: *const fn (self: *const BodyFilter, body_id: *const BodyId) callconv(.c) bool,
+        shouldCollideLocked: *const fn (self: *const BodyFilter, body: *const Body) callconv(.c) bool,
     };
 
     comptime {
@@ -814,36 +579,8 @@ pub const BodyFilter = extern struct {
 pub const ShapeFilter = extern struct {
     __v: *const VTable,
 
-    pub usingnamespace Methods(@This());
-
-    pub fn Methods(comptime T: type) type {
-        return extern struct {
-            pub inline fn shouldCollide(
-                self: *const T,
-                receiving_body_id: u32,
-                shape: *const Shape,
-                sub_shape_id: *const SubShapeId,
-            ) bool {
-                _ = receiving_body_id;
-                return @as(*const ShapeFilter.VTable, @ptrCast(self.__v)).shouldCollide(
-                    @as(*const ShapeFilter, @ptrCast(self)),
-                    @as(*const ShapeFilter.VTable, @ptrCast(self.__v)).receiving_body_id,
-                    shape,
-                    sub_shape_id,
-                );
-            }
-            pub inline fn pairShouldCollide(
-                self: *const T,
-                receiving_body_id: u32,
-                shape1: *const Shape,
-                sub_shape_id1: *const SubShapeId,
-                shape2: *const Shape,
-                sub_shape_id2: *const SubShapeId,
-            ) bool {
-                _ = receiving_body_id;
-                return @as(*const ShapeFilter.VTable, @ptrCast(self.__v)).pairShouldCollide(@as(*const ShapeFilter, @ptrCast(self)), @as(*const ShapeFilter.VTable, @ptrCast(self.__v)).receiving_body_id, shape1, sub_shape_id1, shape2, sub_shape_id2);
-            }
-        };
+    pub fn init(comptime T: type) ShapeFilter {
+        return .{ .__v = initInterface(T, VTable) };
     }
 
     pub const VTable = extern struct {
@@ -852,14 +589,14 @@ pub const ShapeFilter = extern struct {
             self: *const ShapeFilter,
             shape: *const Shape,
             sub_shape_id: *const SubShapeId,
-        ) callconv(.C) bool,
+        ) callconv(.c) bool,
         pairShouldCollide: *const fn (
             self: *const ShapeFilter,
             shape1: *const Shape,
             sub_shape_id1: *const SubShapeId,
             shape2: *const Shape,
             sub_shape_id2: *const SubShapeId,
-        ) callconv(.C) bool,
+        ) callconv(.c) bool,
         receiving_body_id: BodyId = .invalid, // set by jolt before each call to either of the functions above
     };
 
@@ -1277,6 +1014,10 @@ pub const RMatrix = extern struct {
 };
 
 pub const DebugRenderer = if (!debug_renderer_enabled) extern struct {} else extern struct {
+    pub fn initVTable(comptime T: type) *const VTable(T) {
+        return initInterface(T, VTable(T));
+    }
+
     pub fn createSingleton(debug_renderer_impl: *anyopaque) !void {
         switch (@as(DebugRendererResult, @enumFromInt(c.JPC_CreateDebugRendererSingleton(debug_renderer_impl)))) {
             .success => {
@@ -1314,136 +1055,45 @@ pub const DebugRenderer = if (!debug_renderer_enabled) extern struct {} else ext
         c.JPC_BodyDrawFilter_Destroy(@ptrCast(filter));
     }
 
-    pub fn Methods(comptime T: type) type {
-        return extern struct {
-            pub inline fn drawLine(self: *T, from: *const [3]Real, to: *const [3]Real, color: Color) void {
-                return @as(*const DebugRenderer.VTable(T), @ptrCast(self.__v))
-                    .drawLine(
-                    @as(*const T, @ptrCast(self)),
-                    from,
-                    to,
-                    color,
-                );
-            }
-            pub inline fn drawTriangle(
-                self: *T,
-                v1: *const [3]Real,
-                v2: *const [3]Real,
-                v3: *const [3]Real,
-                color: Color,
-            ) void {
-                return @as(*const DebugRenderer.VTable(T), @ptrCast(self.__v))
-                    .drawTriangle(
-                    @as(*const T, @ptrCast(self)),
-                    v1,
-                    v2,
-                    v3,
-                    color,
-                );
-            }
-            pub inline fn createTriangleBatch(
-                self: *T,
-                triangles: []Triangle,
-                triangle_count: u32,
-            ) T.Batch {
-                return @as(*const DebugRenderer.VTable(T), @ptrCast(self.__v))
-                    .createTriangleBatch(
-                    @as(*const T, @ptrCast(self)),
-                    triangles,
-                    triangle_count,
-                );
-            }
-            pub inline fn createTriangleBatchIndexed(
-                self: *T,
-                vertices: []Vertex,
-                vertex_count: u32,
-                indices: []u32,
-                index_count: u32,
-            ) T.Batch {
-                return @as(*const DebugRenderer.VTable(T), @ptrCast(self.__v))
-                    .createTriangleBatchIndexed(
-                    @as(*const T, @ptrCast(self)),
-                    vertices,
-                    vertex_count,
-                    indices,
-                    index_count,
-                );
-            }
-            pub inline fn drawGeometry(
-                self: *T,
-                model_matrix: *const RMatrix,
-                world_space_bound: *const AABox,
-                lod_scale_sq: f32,
-                color: Color,
-                geometry: *const Geometry,
-                cull_mode: CullMode,
-                cast_shadow: CastShadow,
-                draw_mode: DrawMode,
-            ) void {
-                return @as(*const DebugRenderer.VTable(T), @ptrCast(self.__v))
-                    .drawGeometry(
-                    @as(*const T, @ptrCast(self)),
-                    model_matrix,
-                    world_space_bound,
-                    lod_scale_sq,
-                    color,
-                    geometry,
-                    cull_mode,
-                    cast_shadow,
-                    draw_mode,
-                );
-            }
-            pub inline fn drawText3D(
-                self: *T,
-                positions: *const [3]Real,
-                string: [*:0]const u8,
-                color: Color,
-                height: f32,
-            ) void {
-                return @as(*const DebugRenderer.VTable(T), @ptrCast(self.__v))
-                    .drawText3D(
-                    @as(*const T, @ptrCast(self)),
-                    positions,
-                    string,
-                    color,
-                    height,
-                );
-            }
-        };
-    }
-
     pub fn VTable(comptime T: type) type {
         return extern struct {
-            drawLine: ?*const fn (
+            drawLine: *const fn (
                 self: *T,
                 from: *const [3]Real,
                 to: *const [3]Real,
                 color: Color,
-            ) callconv(.C) void = null,
-            drawTriangle: ?*const fn (
+            ) callconv(.c) void,
+            drawTriangle: *const fn (
                 self: *T,
                 v1: *const [3]Real,
                 v2: *const [3]Real,
                 v3: *const [3]Real,
                 color: Color,
-            ) callconv(.C) void = null,
-            createTriangleBatch: ?*const fn (
+            ) callconv(.c) void,
+            /// Implementations should call `DebugRenderer.createTriangleBatch` to
+            /// allocate the reference-counted TriangleBatch
+            createTriangleBatch: *const fn (
                 self: *T,
                 triangles: [*]Triangle,
                 triangle_count: u32,
-            ) callconv(.C) *anyopaque = null,
-            createTriangleBatchIndexed: ?*const fn (
+            ) callconv(.c) *TriangleBatch,
+            /// Implementations should call `DebugRenderer.createTriangleBatch` to
+            /// allocate the reference-counted TriangleBatch
+            createTriangleBatchIndexed: *const fn (
                 self: *T,
                 vertices: [*]Vertex,
                 vertex_count: u32,
                 indices: [*]u32,
                 index_count: u32,
-            ) callconv(.C) *anyopaque = null,
-            destroyTriangleBatch: ?*const fn (
+            ) callconv(.c) *TriangleBatch,
+            /// Will be called when the reference count of the TriangleBatch
+            /// returned by the above functions reaches zero. `batch` will be the
+            /// value that was passed to `DebugRenderer.createTriangleBatch`.
+            destroyTriangleBatch: *const fn (
                 self: *T,
-                batch: *const anyopaque,
-            ) callconv(.C) void = null,
-            drawGeometry: ?*const fn (
+                batch: *anyopaque,
+            ) callconv(.c) void,
+            drawGeometry: *const fn (
                 self: *T,
                 model_matrix: *const RMatrix,
                 world_space_bound: *const AABox,
@@ -1453,14 +1103,14 @@ pub const DebugRenderer = if (!debug_renderer_enabled) extern struct {} else ext
                 cull_mode: CullMode,
                 cast_shadow: CastShadow,
                 draw_mode: DrawMode,
-            ) callconv(.C) void = null,
-            drawText3D: ?*const fn (
+            ) callconv(.c) void,
+            drawText3D: *const fn (
                 self: *T,
                 positions: *const [3]Real,
                 string: [*:0]const u8,
                 color: Color,
                 height: f32,
-            ) callconv(.C) void = null,
+            ) callconv(.c) void,
         };
     }
 
@@ -1510,7 +1160,7 @@ pub const DebugRenderer = if (!debug_renderer_enabled) extern struct {} else ext
     };
     // zig fmt: on
 
-    pub const BodyDrawFilterFunc = *const fn (*const Body) callconv(.C) bool;
+    pub const BodyDrawFilterFunc = *const fn (*const Body) callconv(.c) bool;
     pub const BodyDrawFilter = opaque {};
 
     pub const TriangleBatch = opaque {};
@@ -1578,13 +1228,13 @@ pub const GlobalState = struct {
 };
 var state: ?GlobalState = null;
 
-pub const TraceFunc = *const fn (fmt: ?[*:0]const u8, ...) callconv(.C) void;
+pub const TraceFunc = *const fn (fmt: ?[*:0]const u8, ...) callconv(.c) void;
 pub const AssertFailedFunc = *const fn (
     expression: ?[*:0]const u8,
     message: ?[*:0]const u8,
     file: ?[*:0]const u8,
     line: u32,
-) callconv(.C) bool;
+) callconv(.c) bool;
 
 pub fn init(allocator: std.mem.Allocator, args: struct {
     temp_allocator_size: u32 = 16 * 1024 * 1024,
@@ -1805,31 +1455,30 @@ pub const PhysicsSystem = opaque {
         }
     }
 
-    pub usingnamespace if (!debug_renderer_enabled) struct {} else struct {
-        pub fn drawBodies(
-            physics_system: *PhysicsSystem,
-            in_draw_settings: *const DebugRenderer.BodyDrawSettings,
-            in_draw_filter: ?*const DebugRenderer.BodyDrawFilter,
-        ) void {
-            c.JPC_PhysicsSystem_DrawBodies(
-                @as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)),
-                @as(*const c.JPC_BodyManager_DrawSettings, @ptrCast(in_draw_settings)),
-                @as(?*const c.JPC_BodyDrawFilter, @ptrCast(in_draw_filter)),
-            );
-        }
+    pub const drawBodies = if (debug_renderer_enabled) _drawBodies else void;
+    pub const drawConstraints = if (debug_renderer_enabled) _drawConstraints else void;
+    pub const drawConstraintLimits = if (debug_renderer_enabled) _drawConstraintLimits else void;
+    pub const drawConstraintReferenceFrame = if (debug_renderer_enabled) _drawConstraintReferenceFrame else void;
 
-        pub fn drawConstraints(physics_system: *PhysicsSystem) void {
-            c.JPC_PhysicsSystem_DrawConstraints(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)));
-        }
+    fn _drawBodies(
+        physics_system: *PhysicsSystem,
+        in_draw_settings: *const DebugRenderer.BodyDrawSettings,
+        in_draw_filter: ?*const DebugRenderer.BodyDrawFilter,
+    ) void {
+        c.JPC_PhysicsSystem_DrawBodies(@ptrCast(physics_system), @ptrCast(in_draw_settings), @ptrCast(in_draw_filter));
+    }
 
-        pub fn drawConstraintLimits(physics_system: *PhysicsSystem) void {
-            c.JPC_PhysicsSystem_DrawConstraintLimits(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)));
-        }
+    fn _drawConstraints(physics_system: *PhysicsSystem) void {
+        c.JPC_PhysicsSystem_DrawConstraints(@ptrCast(physics_system));
+    }
 
-        pub fn drawConstraintReferenceFrame(physics_system: *PhysicsSystem) void {
-            c.JPC_PhysicsSystem_DrawConstraintReferenceFrame(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)));
-        }
-    };
+    fn _drawConstraintLimits(physics_system: *PhysicsSystem) void {
+        c.JPC_PhysicsSystem_DrawConstraintLimits(@ptrCast(physics_system));
+    }
+
+    fn _drawConstraintReferenceFrame(physics_system: *PhysicsSystem) void {
+        c.JPC_PhysicsSystem_DrawConstraintReferenceFrame(@ptrCast(physics_system));
+    }
 
     pub fn getBodyIds(physics_system: *const PhysicsSystem, body_ids: *std.ArrayList(BodyId)) !void {
         try body_ids.ensureTotalCapacityPrecise(physics_system.getMaxBodies());
@@ -3046,41 +2695,29 @@ pub const MotionProperties = extern struct {
 //
 //--------------------------------------------------------------------------------------------------
 pub const ShapeSettings = opaque {
-    pub usingnamespace Methods(@This());
+    pub fn addRef(shape_settings: *ShapeSettings) void {
+        c.JPC_ShapeSettings_AddRef(@ptrCast(shape_settings));
+    }
 
-    fn Methods(comptime T: type) type {
-        return struct {
-            pub fn asShapeSettings(shape_settings: *const T) *const ShapeSettings {
-                return @as(*const ShapeSettings, @ptrCast(shape_settings));
-            }
-            pub fn asShapeSettingsMut(shape_settings: *T) *ShapeSettings {
-                return @as(*ShapeSettings, @ptrCast(shape_settings));
-            }
+    pub fn release(shape_settings: *ShapeSettings) void {
+        c.JPC_ShapeSettings_Release(@ptrCast(shape_settings));
+    }
 
-            pub fn addRef(shape_settings: *T) void {
-                c.JPC_ShapeSettings_AddRef(@as(*c.JPC_ShapeSettings, @ptrCast(shape_settings)));
-            }
-            pub fn release(shape_settings: *T) void {
-                c.JPC_ShapeSettings_Release(@as(*c.JPC_ShapeSettings, @ptrCast(shape_settings)));
-            }
-            pub fn getRefCount(shape_settings: *const T) u32 {
-                return c.JPC_ShapeSettings_GetRefCount(@as(*const c.JPC_ShapeSettings, @ptrCast(shape_settings)));
-            }
+    pub fn getRefCount(shape_settings: *const ShapeSettings) u32 {
+        return c.JPC_ShapeSettings_GetRefCount(@as(*const c.JPC_ShapeSettings, @ptrCast(shape_settings)));
+    }
 
-            pub fn createShape(shape_settings: *const T) !*Shape {
-                const shape = c.JPC_ShapeSettings_CreateShape(@as(*const c.JPC_ShapeSettings, @ptrCast(shape_settings)));
-                if (shape == null)
-                    return error.FailedToCreateShape;
-                return @as(*Shape, @ptrCast(shape));
-            }
+    pub fn createShape(shape_settings: *const ShapeSettings) !*Shape {
+        return @ptrCast(c.JPC_ShapeSettings_CreateShape(@ptrCast(shape_settings)) orelse
+            return error.FailedToCreateShape);
+    }
 
-            pub fn getUserData(shape_settings: *const T) u64 {
-                return c.JPC_ShapeSettings_GetUserData(@as(*const c.JPC_ShapeSettings, @ptrCast(shape_settings)));
-            }
-            pub fn setUserData(shape_settings: *T, user_data: u64) void {
-                return c.JPC_ShapeSettings_SetUserData(@as(*c.JPC_ShapeSettings, @ptrCast(shape_settings)), user_data);
-            }
-        };
+    pub fn getUserData(shape_settings: *const ShapeSettings) u64 {
+        return c.JPC_ShapeSettings_GetUserData(@ptrCast(shape_settings));
+    }
+
+    pub fn setUserData(shape_settings: *ShapeSettings, user_data: u64) void {
+        return c.JPC_ShapeSettings_SetUserData(@ptrCast(shape_settings), user_data);
     }
 };
 //--------------------------------------------------------------------------------------------------
@@ -3089,40 +2726,27 @@ pub const ShapeSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const ConvexShapeSettings = opaque {
-    pub usingnamespace Methods(@This());
+    pub fn asShapeSettings(convex_shape_settings: *ConvexShapeSettings) *ShapeSettings {
+        return @ptrCast(convex_shape_settings);
+    }
 
-    fn Methods(comptime T: type) type {
-        return struct {
-            pub usingnamespace ShapeSettings.Methods(T);
+    pub fn getMaterial(convex_shape_settings: *const ConvexShapeSettings) ?*const Material {
+        return @ptrCast(c.JPC_ConvexShapeSettings_GetMaterial(@ptrCast(convex_shape_settings)));
+    }
 
-            pub fn asConvexShapeSettings(convex_shape_settings: *T) *ConvexShapeSettings {
-                return @as(*ConvexShapeSettings, @ptrCast(convex_shape_settings));
-            }
+    pub fn setMaterial(convex_shape_settings: *ConvexShapeSettings, material: ?*Material) void {
+        c.JPC_ConvexShapeSettings_SetMaterial(
+            @ptrCast(convex_shape_settings),
+            @ptrCast(material),
+        );
+    }
 
-            pub fn getMaterial(convex_shape_settings: *const T) ?*const Material {
-                return @as(?*const Material, @ptrCast(c.JPC_ConvexShapeSettings_GetMaterial(
-                    @as(*const c.JPC_ConvexShapeSettings, @ptrCast(convex_shape_settings)),
-                )));
-            }
-            pub fn setMaterial(convex_shape_settings: *T, material: ?*Material) void {
-                c.JPC_ConvexShapeSettings_SetMaterial(
-                    @as(*c.JPC_ConvexShapeSettings, @ptrCast(convex_shape_settings)),
-                    @as(?*c.JPC_PhysicsMaterial, @ptrCast(material)),
-                );
-            }
+    pub fn getDensity(convex_shape_settings: *const ConvexShapeSettings) f32 {
+        return c.JPC_ConvexShapeSettings_GetDensity(@ptrCast(convex_shape_settings));
+    }
 
-            pub fn getDensity(convex_shape_settings: *const T) f32 {
-                return c.JPC_ConvexShapeSettings_GetDensity(
-                    @as(*const c.JPC_ConvexShapeSettings, @ptrCast(convex_shape_settings)),
-                );
-            }
-            pub fn setDensity(shape_settings: *T, density: f32) void {
-                c.JPC_ConvexShapeSettings_SetDensity(
-                    @as(*c.JPC_ConvexShapeSettings, @ptrCast(shape_settings)),
-                    density,
-                );
-            }
-        };
+    pub fn setDensity(shape_settings: *ConvexShapeSettings, density: f32) void {
+        c.JPC_ConvexShapeSettings_SetDensity(@ptrCast(shape_settings), density);
     }
 };
 //--------------------------------------------------------------------------------------------------
@@ -3131,33 +2755,39 @@ pub const ConvexShapeSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const BoxShapeSettings = opaque {
-    pub usingnamespace ConvexShapeSettings.Methods(@This());
+    pub fn asShapeSettings(box_shape_settings: *BoxShapeSettings) *ShapeSettings {
+        return @ptrCast(box_shape_settings);
+    }
+
+    pub fn asConvexShapeSettings(box_shape_settings: *BoxShapeSettings) *ConvexShapeSettings {
+        return @ptrCast(box_shape_settings);
+    }
 
     pub fn create(half_extent: [3]f32) !*BoxShapeSettings {
-        const box_shape_settings = c.JPC_BoxShapeSettings_Create(&half_extent);
-        if (box_shape_settings == null)
-            return error.FailedToCreateBoxShapeSettings;
-        return @as(*BoxShapeSettings, @ptrCast(box_shape_settings));
+        return @ptrCast(c.JPC_BoxShapeSettings_Create(&half_extent) orelse
+            return error.FailedToCreateBoxShapeSettings);
     }
 
     pub fn getHalfExtent(box_shape_settings: *const BoxShapeSettings) [3]f32 {
         var half_extent: [3]f32 = undefined;
         c.JPC_BoxShapeSettings_GetHalfExtent(
-            @as(*const c.JPC_BoxShapeSettings, @ptrCast(box_shape_settings)),
+            @ptrCast(box_shape_settings),
             &half_extent,
         );
         return half_extent;
     }
+
     pub fn setHalfExtent(box_shape_settings: *BoxShapeSettings, half_extent: [3]f32) void {
-        c.JPC_BoxShapeSettings_SetHalfExtent(@as(*c.JPC_BoxShapeSettings, @ptrCast(box_shape_settings)), &half_extent);
+        c.JPC_BoxShapeSettings_SetHalfExtent(@ptrCast(box_shape_settings), &half_extent);
     }
 
     pub fn getConvexRadius(box_shape_settings: *const BoxShapeSettings) f32 {
-        return c.JPC_BoxShapeSettings_GetConvexRadius(@as(*const c.JPC_BoxShapeSettings, @ptrCast(box_shape_settings)));
+        return c.JPC_BoxShapeSettings_GetConvexRadius(@ptrCast(box_shape_settings));
     }
+
     pub fn setConvexRadius(box_shape_settings: *BoxShapeSettings, convex_radius: f32) void {
         c.JPC_BoxShapeSettings_SetConvexRadius(
-            @as(*c.JPC_BoxShapeSettings, @ptrCast(box_shape_settings)),
+            @ptrCast(box_shape_settings),
             convex_radius,
         );
     }
@@ -3168,25 +2798,25 @@ pub const BoxShapeSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const SphereShapeSettings = opaque {
-    pub usingnamespace ConvexShapeSettings.Methods(@This());
+    pub fn asShapeSettings(sphere_shape_settings: *SphereShapeSettings) *ShapeSettings {
+        return @ptrCast(sphere_shape_settings);
+    }
+
+    pub fn asConvexShapeSettings(sphere_shape_settings: *SphereShapeSettings) *ConvexShapeSettings {
+        return @ptrCast(sphere_shape_settings);
+    }
 
     pub fn create(radius: f32) !*SphereShapeSettings {
-        const sphere_shape_settings = c.JPC_SphereShapeSettings_Create(radius);
-        if (sphere_shape_settings == null)
-            return error.FailedToCreateSphereShapeSettings;
-        return @as(*SphereShapeSettings, @ptrCast(sphere_shape_settings));
+        return @ptrCast(c.JPC_SphereShapeSettings_Create(radius) orelse
+            return error.FailedToCreateSphereShapeSettings);
     }
 
     pub fn getRadius(sphere_shape_settings: *const SphereShapeSettings) f32 {
-        return c.JPC_SphereShapeSettings_GetRadius(
-            @as(*const c.JPC_SphereShapeSettings, @ptrCast(sphere_shape_settings)),
-        );
+        return c.JPC_SphereShapeSettings_GetRadius(@ptrCast(sphere_shape_settings));
     }
+
     pub fn setRadius(sphere_shape_settings: *SphereShapeSettings, radius: f32) void {
-        c.JPC_SphereShapeSettings_SetRadius(
-            @as(*c.JPC_SphereShapeSettings, @ptrCast(sphere_shape_settings)),
-            radius,
-        );
+        c.JPC_SphereShapeSettings_SetRadius(@ptrCast(sphere_shape_settings), radius);
     }
 };
 //--------------------------------------------------------------------------------------------------
@@ -3195,23 +2825,29 @@ pub const SphereShapeSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const TriangleShapeSettings = opaque {
-    pub usingnamespace ConvexShapeSettings.Methods(@This());
+    pub fn asShapeSettings(triangle_shape_settings: *TriangleShapeSettings) *ShapeSettings {
+        return @ptrCast(triangle_shape_settings);
+    }
+
+    pub fn asConvexShapeSettings(triangle_shape_settings: *TriangleShapeSettings) *ConvexShapeSettings {
+        return @ptrCast(triangle_shape_settings);
+    }
 
     pub fn create(v1: [3]f32, v2: [3]f32, v3: [3]f32) !*TriangleShapeSettings {
-        const triangle_shape_settings = c.JPC_TriangleShapeSettings_Create(&v1, &v2, &v3);
-        if (triangle_shape_settings == null)
-            return error.FailedToCreateTriangleShapeSettings;
-        return @as(*TriangleShapeSettings, @ptrCast(triangle_shape_settings));
+        return @ptrCast(c.JPC_TriangleShapeSettings_Create(
+            &v1,
+            &v2,
+            &v3,
+        ) orelse return error.FailedToCreateTriangleShapeSettings);
     }
 
     pub fn getConvexRadius(triangle_shape_settings: *const TriangleShapeSettings) f32 {
-        return c.JPC_TriangleShapeSettings_GetConvexRadius(
-            @as(*const c.JPC_TriangleShapeSettings, @ptrCast(triangle_shape_settings)),
-        );
+        return c.JPC_TriangleShapeSettings_GetConvexRadius(@ptrCast(triangle_shape_settings));
     }
+
     pub fn setConvexRadius(triangle_shape_settings: *TriangleShapeSettings, convex_radius: f32) void {
         c.JPC_TriangleShapeSettings_SetConvexRadius(
-            @as(*c.JPC_TriangleShapeSettings, @ptrCast(triangle_shape_settings)),
+            @ptrCast(triangle_shape_settings),
             convex_radius,
         );
     }
@@ -3222,35 +2858,36 @@ pub const TriangleShapeSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const CapsuleShapeSettings = opaque {
-    pub usingnamespace ConvexShapeSettings.Methods(@This());
+    pub fn asShapeSettings(capsule_shape_settings: *CapsuleShapeSettings) *ShapeSettings {
+        return @ptrCast(capsule_shape_settings);
+    }
+
+    pub fn asConvexShapeSettings(capsule_shape_settings: *CapsuleShapeSettings) *ConvexShapeSettings {
+        return @ptrCast(capsule_shape_settings);
+    }
 
     pub fn create(half_height: f32, radius: f32) !*CapsuleShapeSettings {
-        const capsule_shape_settings = c.JPC_CapsuleShapeSettings_Create(half_height, radius);
-        if (capsule_shape_settings == null)
-            return error.FailedToCreateCapsuleShapeSettings;
-        return @as(*CapsuleShapeSettings, @ptrCast(capsule_shape_settings));
+        return @ptrCast(c.JPC_CapsuleShapeSettings_Create(
+            half_height,
+            radius,
+        ) orelse return error.FailedToCreateCapsuleShapeSettings);
     }
 
     pub fn getHalfHeight(capsule_shape_settings: *const CapsuleShapeSettings) f32 {
-        return c.JPC_CapsuleShapeSettings_GetHalfHeight(
-            @as(*const c.JPC_CapsuleShapeSettings, @ptrCast(capsule_shape_settings)),
-        );
+        return c.JPC_CapsuleShapeSettings_GetHalfHeight(@ptrCast(capsule_shape_settings));
     }
+
     pub fn setHalfHeight(capsule_shape_settings: *CapsuleShapeSettings, half_height: f32) void {
-        c.JPC_CapsuleShapeSettings_SetHalfHeight(
-            @as(*c.JPC_CapsuleShapeSettings, @ptrCast(capsule_shape_settings)),
-            half_height,
-        );
+        c.JPC_CapsuleShapeSettings_SetHalfHeight(@ptrCast(capsule_shape_settings), half_height);
     }
 
     pub fn getRadius(capsule_shape_settings: *const CapsuleShapeSettings) f32 {
-        return c.JPC_CapsuleShapeSettings_GetRadius(
-            @as(*const c.JPC_CapsuleShapeSettings, @ptrCast(capsule_shape_settings)),
-        );
+        return c.JPC_CapsuleShapeSettings_GetRadius(@ptrCast(capsule_shape_settings));
     }
+
     pub fn setRadius(capsule_shape_settings: *CapsuleShapeSettings, radius: f32) void {
         c.JPC_CapsuleShapeSettings_SetRadius(
-            @as(*c.JPC_CapsuleShapeSettings, @ptrCast(capsule_shape_settings)),
+            @ptrCast(capsule_shape_settings),
             radius,
         );
     }
@@ -3261,36 +2898,41 @@ pub const CapsuleShapeSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const TaperedCapsuleShapeSettings = opaque {
-    pub usingnamespace ConvexShapeSettings.Methods(@This());
+    pub fn asShapeSettings(tapered_capsule_shape_settings: *TaperedCapsuleShapeSettings) *ShapeSettings {
+        return @ptrCast(tapered_capsule_shape_settings);
+    }
+
+    pub fn asConvexShapeSettings(tapered_capsule_shape_settings: *TaperedCapsuleShapeSettings) *ConvexShapeSettings {
+        return @ptrCast(tapered_capsule_shape_settings);
+    }
 
     pub fn create(half_height: f32, top_radius: f32, bottom_radius: f32) !*TaperedCapsuleShapeSettings {
-        const capsule_shape_settings = c.JPC_TaperedCapsuleShapeSettings_Create(
+        return @ptrCast(c.JPC_TaperedCapsuleShapeSettings_Create(
             half_height,
             top_radius,
             bottom_radius,
-        );
-        if (capsule_shape_settings == null)
-            return error.FailedToCreateTaperedCapsuleShapeSettings;
-        return @as(*TaperedCapsuleShapeSettings, @ptrCast(capsule_shape_settings));
+        ) orelse return error.FailedToCreateTaperedCapsuleShapeSettings);
     }
 
     pub fn getHalfHeight(capsule_shape_settings: *const TaperedCapsuleShapeSettings) f32 {
         return c.JPC_TaperedCapsuleShapeSettings_GetHalfHeight(
-            @as(*const c.JPC_TaperedCapsuleShapeSettings, @ptrCast(capsule_shape_settings)),
+            @ptrCast(capsule_shape_settings),
         );
     }
+
     pub fn setHalfHeight(capsule_shape_settings: *TaperedCapsuleShapeSettings, half_height: f32) void {
         c.JPC_TaperedCapsuleShapeSettings_SetHalfHeight(
-            @as(*c.JPC_TaperedCapsuleShapeSettings, @ptrCast(capsule_shape_settings)),
+            @ptrCast(capsule_shape_settings),
             half_height,
         );
     }
 
     pub fn getTopRadius(capsule_shape_settings: *const TaperedCapsuleShapeSettings) f32 {
         return c.JPC_TaperedCapsuleShapeSettings_GetTopRadius(
-            @as(*const c.JPC_TaperedCapsuleShapeSettings, @ptrCast(capsule_shape_settings)),
+            @ptrCast(capsule_shape_settings),
         );
     }
+
     pub fn setTopRadius(capsule_shape_settings: *TaperedCapsuleShapeSettings, radius: f32) void {
         c.JPC_TaperedCapsuleShapeSettings_SetTopRadius(
             @as(*c.JPC_TaperedCapsuleShapeSettings, @ptrCast(capsule_shape_settings)),
@@ -3303,6 +2945,7 @@ pub const TaperedCapsuleShapeSettings = opaque {
             @as(*const c.JPC_TaperedCapsuleShapeSettings, @ptrCast(capsule_shape_settings)),
         );
     }
+
     pub fn setBottomRadius(capsule_shape_settings: *TaperedCapsuleShapeSettings, radius: f32) void {
         c.JPC_TaperedCapsuleShapeSettings_SetBottomRadius(
             @as(*c.JPC_TaperedCapsuleShapeSettings, @ptrCast(capsule_shape_settings)),
@@ -3316,47 +2959,56 @@ pub const TaperedCapsuleShapeSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const CylinderShapeSettings = opaque {
-    pub usingnamespace ConvexShapeSettings.Methods(@This());
+    pub fn asShapeSettings(cylinder_shape_settings: *CylinderShapeSettings) *ShapeSettings {
+        return @ptrCast(cylinder_shape_settings);
+    }
+
+    pub fn asConvexShapeSettings(cylinder_shape_settings: *CylinderShapeSettings) *ConvexShapeSettings {
+        return @ptrCast(cylinder_shape_settings);
+    }
 
     pub fn create(half_height: f32, radius: f32) !*CylinderShapeSettings {
-        const cylinder_shape_settings = c.JPC_CylinderShapeSettings_Create(half_height, radius);
-        if (cylinder_shape_settings == null)
-            return error.FailedToCreateCylinderShapeSettings;
-        return @as(*CylinderShapeSettings, @ptrCast(cylinder_shape_settings));
+        return @ptrCast(c.JPC_CylinderShapeSettings_Create(
+            half_height,
+            radius,
+        ) orelse return error.FailedToCreateCylinderShapeSettings);
     }
 
     pub fn getConvexRadius(cylinder_shape_settings: *const CylinderShapeSettings) f32 {
         return c.JPC_CylinderShapeSettings_GetConvexRadius(
-            @as(*const c.JPC_CylinderShapeSettings, @ptrCast(cylinder_shape_settings)),
+            @ptrCast(cylinder_shape_settings),
         );
     }
+
     pub fn setConvexRadius(cylinder_shape_settings: *CylinderShapeSettings, convex_radius: f32) void {
         c.JPC_CylinderShapeSettings_SetConvexRadius(
-            @as(*c.JPC_CylinderShapeSettings, @ptrCast(cylinder_shape_settings)),
+            @ptrCast(cylinder_shape_settings),
             convex_radius,
         );
     }
 
     pub fn getHalfHeight(cylinder_shape_settings: *const CylinderShapeSettings) f32 {
         return c.JPC_CylinderShapeSettings_GetHalfHeight(
-            @as(*const c.JPC_CylinderShapeSettings, @ptrCast(cylinder_shape_settings)),
+            @ptrCast(cylinder_shape_settings),
         );
     }
+
     pub fn setHalfHeight(cylinder_shape_settings: *CylinderShapeSettings, half_height: f32) void {
         c.JPC_CylinderShapeSettings_SetHalfHeight(
-            @as(*c.JPC_CylinderShapeSettings, @ptrCast(cylinder_shape_settings)),
+            @ptrCast(cylinder_shape_settings),
             half_height,
         );
     }
 
     pub fn getRadius(cylinder_shape_settings: *const CylinderShapeSettings) f32 {
         return c.JPC_CylinderShapeSettings_GetRadius(
-            @as(*const c.JPC_CylinderShapeSettings, @ptrCast(cylinder_shape_settings)),
+            @ptrCast(cylinder_shape_settings),
         );
     }
+
     pub fn setRadius(cylinder_shape_settings: *CylinderShapeSettings, radius: f32) void {
         c.JPC_CylinderShapeSettings_SetRadius(
-            @as(*c.JPC_CylinderShapeSettings, @ptrCast(cylinder_shape_settings)),
+            @ptrCast(cylinder_shape_settings),
             radius,
         );
     }
@@ -3367,23 +3019,31 @@ pub const CylinderShapeSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const ConvexHullShapeSettings = opaque {
-    pub usingnamespace ConvexShapeSettings.Methods(@This());
+    pub fn asShapeSettings(convex_hull_shape_settings: *ConvexHullShapeSettings) *ShapeSettings {
+        return @ptrCast(convex_hull_shape_settings);
+    }
+
+    pub fn asConvexShapeSettings(convex_hull_shape_settings: *ConvexHullShapeSettings) *ConvexShapeSettings {
+        return @ptrCast(convex_hull_shape_settings);
+    }
 
     pub fn create(vertices: *const anyopaque, num_vertices: u32, vertex_size: u32) !*ConvexHullShapeSettings {
-        const settings = c.JPC_ConvexHullShapeSettings_Create(vertices, num_vertices, vertex_size);
-        if (settings == null)
-            return error.FailedToCreateConvexHullShapeSettings;
-        return @as(*ConvexHullShapeSettings, @ptrCast(settings));
+        return @ptrCast(c.JPC_ConvexHullShapeSettings_Create(
+            vertices,
+            num_vertices,
+            vertex_size,
+        ) orelse return error.FailedToCreateConvexHullShapeSettings);
     }
 
     pub fn getMaxConvexRadius(settings: *const ConvexHullShapeSettings) f32 {
         return c.JPC_ConvexHullShapeSettings_GetMaxConvexRadius(
-            @as(*const c.JPC_ConvexHullShapeSettings, @ptrCast(settings)),
+            @ptrCast(settings),
         );
     }
+
     pub fn setMaxConvexRadius(settings: *ConvexHullShapeSettings, radius: f32) void {
         c.JPC_ConvexHullShapeSettings_SetMaxConvexRadius(
-            @as(*c.JPC_ConvexHullShapeSettings, @ptrCast(settings)),
+            @ptrCast(settings),
             radius,
         );
     }
@@ -3394,38 +3054,42 @@ pub const ConvexHullShapeSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const HeightFieldShapeSettings = opaque {
-    pub usingnamespace ShapeSettings.Methods(@This());
+    pub fn asShapeSettings(height_field_shape_settings: *HeightFieldShapeSettings) *ShapeSettings {
+        return @ptrCast(height_field_shape_settings);
+    }
 
     pub fn create(
         samples: [*]const f32, // height_field_size^2 samples
         height_field_size: u32, //  height_field_size / block_size must be a power of 2 and minimally 2
     ) !*HeightFieldShapeSettings {
-        const settings = c.JPC_HeightFieldShapeSettings_Create(samples, height_field_size);
-        if (settings == null)
-            return error.FailedToCreateHeightFieldShapeSettings;
-        return @as(*HeightFieldShapeSettings, @ptrCast(settings));
+        return @ptrCast(c.JPC_HeightFieldShapeSettings_Create(
+            samples,
+            height_field_size,
+        ) orelse return error.FailedToCreateHeightFieldShapeSettings);
     }
 
     pub fn getBlockSize(settings: *const HeightFieldShapeSettings) u32 {
         return c.JPC_HeightFieldShapeSettings_GetBlockSize(
-            @as(*const c.JPC_HeightFieldShapeSettings, @ptrCast(settings)),
+            @ptrCast(settings),
         );
     }
+
     pub fn setBlockSize(settings: *HeightFieldShapeSettings, block_size: u32) void {
         c.JPC_HeightFieldShapeSettings_SetBlockSize(
-            @as(*c.JPC_HeightFieldShapeSettings, @ptrCast(settings)),
+            @ptrCast(settings),
             block_size,
         );
     }
 
     pub fn getBitsPerSample(settings: *const HeightFieldShapeSettings) u32 {
         return c.JPC_HeightFieldShapeSettings_GetBitsPerSample(
-            @as(*const c.JPC_HeightFieldShapeSettings, @ptrCast(settings)),
+            @ptrCast(settings),
         );
     }
+
     pub fn setBitsPerSample(settings: *HeightFieldShapeSettings, num_bits: u32) void {
         c.JPC_HeightFieldShapeSettings_SetBitsPerSample(
-            @as(*c.JPC_HeightFieldShapeSettings, @ptrCast(settings)),
+            @ptrCast(settings),
             num_bits,
         );
     }
@@ -3433,14 +3097,15 @@ pub const HeightFieldShapeSettings = opaque {
     pub fn getOffset(settings: *const HeightFieldShapeSettings) [3]f32 {
         var offset: [3]f32 = undefined;
         c.JPC_HeightFieldShapeSettings_GetOffset(
-            @as(*const c.JPC_HeightFieldShapeSettings, @ptrCast(settings)),
+            @ptrCast(settings),
             &offset,
         );
         return offset;
     }
+
     pub fn setOffset(settings: *HeightFieldShapeSettings, offset: [3]f32) void {
         c.JPC_HeightFieldShapeSettings_SetOffset(
-            @as(*c.JPC_HeightFieldShapeSettings, @ptrCast(settings)),
+            @ptrCast(settings),
             &offset,
         );
     }
@@ -3448,14 +3113,15 @@ pub const HeightFieldShapeSettings = opaque {
     pub fn getScale(settings: *const HeightFieldShapeSettings) [3]f32 {
         var scale: [3]f32 = undefined;
         c.JPC_HeightFieldShapeSettings_GetScale(
-            @as(*const c.JPC_HeightFieldShapeSettings, @ptrCast(settings)),
+            @ptrCast(settings),
             &scale,
         );
         return scale;
     }
+
     pub fn setScale(settings: *HeightFieldShapeSettings, scale: [3]f32) void {
         c.JPC_HeightFieldShapeSettings_SetScale(
-            @as(*c.JPC_HeightFieldShapeSettings, @ptrCast(settings)),
+            @ptrCast(settings),
             &scale,
         );
     }
@@ -3466,7 +3132,9 @@ pub const HeightFieldShapeSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const MeshShapeSettings = opaque {
-    pub usingnamespace ShapeSettings.Methods(@This());
+    pub fn asShapeSettings(mesh_shape_settings: *MeshShapeSettings) *ShapeSettings {
+        return @ptrCast(mesh_shape_settings);
+    }
 
     pub fn create(
         vertices: *const anyopaque,
@@ -3474,32 +3142,29 @@ pub const MeshShapeSettings = opaque {
         vertex_size: u32,
         indices: []const u32,
     ) !*MeshShapeSettings {
-        const settings = c.JPC_MeshShapeSettings_Create(
+        return @ptrCast(c.JPC_MeshShapeSettings_Create(
             vertices,
             num_vertices,
             vertex_size,
             indices.ptr,
-            @as(u32, @intCast(indices.len)),
-        );
-        if (settings == null)
-            return error.FailedToCreateMeshShapeSettings;
-        return @as(*MeshShapeSettings, @ptrCast(settings));
+            @intCast(indices.len),
+        ) orelse return error.FailedToCreateMeshShapeSettings);
     }
 
     pub fn getMaxTrianglesPerLeaf(settings: *const MeshShapeSettings) u32 {
         return c.JPC_MeshShapeSettings_GetMaxTrianglesPerLeaf(
-            @as(*const c.JPC_MeshShapeSettings, @ptrCast(settings)),
+            @ptrCast(settings),
         );
     }
     pub fn setMaxTrianglesPerLeaf(settings: *MeshShapeSettings, max_triangles: u32) void {
         c.JPC_MeshShapeSettings_SetMaxTrianglesPerLeaf(
-            @as(*c.JPC_MeshShapeSettings, @ptrCast(settings)),
+            @ptrCast(settings),
             max_triangles,
         );
     }
 
     pub fn sanitize(settings: *MeshShapeSettings) void {
-        c.JPC_MeshShapeSettings_Sanitize(@as(*c.JPC_MeshShapeSettings, @ptrCast(settings)));
+        c.JPC_MeshShapeSettings_Sanitize(@ptrCast(settings));
     }
 };
 //--------------------------------------------------------------------------------------------------
@@ -3508,38 +3173,34 @@ pub const MeshShapeSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const DecoratedShapeSettings = opaque {
-    pub usingnamespace ShapeSettings.Methods(@This());
+    pub fn asShapeSettings(decorated_shape_settings: *DecoratedShapeSettings) *ShapeSettings {
+        return @ptrCast(decorated_shape_settings);
+    }
 
     pub fn createRotatedTranslated(
         inner_shape: *const ShapeSettings,
         rotation: [4]f32,
         translation: [3]f32,
     ) !*DecoratedShapeSettings {
-        const settings = c.JPC_RotatedTranslatedShapeSettings_Create(
+        return @ptrCast(c.JPC_RotatedTranslatedShapeSettings_Create(
             @as(*const c.JPC_ShapeSettings, @ptrCast(inner_shape)),
             &rotation,
             &translation,
-        );
-        if (settings == null) return error.FailedToCreateDecoratedShapeSettings;
-        return @as(*DecoratedShapeSettings, @ptrCast(settings));
+        ) orelse return error.FailedToCreateDecoratedShapeSettings);
     }
 
     pub fn createScaled(inner_shape: *const ShapeSettings, scale: [3]f32) !*DecoratedShapeSettings {
-        const settings = c.JPC_ScaledShapeSettings_Create(
-            @as(*const c.JPC_ShapeSettings, @ptrCast(inner_shape)),
+        return @ptrCast(c.JPC_ScaledShapeSettings_Create(
+            @ptrCast(inner_shape),
             &scale,
-        );
-        if (settings == null) return error.FailedToCreateDecoratedShapeSettings;
-        return @as(*DecoratedShapeSettings, @ptrCast(settings));
+        ) orelse return error.FailedToCreateDecoratedShapeSettings);
     }
 
     pub fn createOffsetCenterOfMass(inner_shape: *const ShapeSettings, offset: [3]f32) !*DecoratedShapeSettings {
-        const settings = c.JPC_OffsetCenterOfMassShapeSettings_Create(
+        return @ptrCast(c.JPC_OffsetCenterOfMassShapeSettings_Create(
             @as(*const c.JPC_ShapeSettings, @ptrCast(inner_shape)),
             &offset,
-        );
-        if (settings == null) return error.FailedToCreateDecoratedShapeSettings;
-        return @as(*DecoratedShapeSettings, @ptrCast(settings));
+        ) orelse return error.FailedToCreateDecoratedShapeSettings);
     }
 };
 //--------------------------------------------------------------------------------------------------
@@ -3548,26 +3209,32 @@ pub const DecoratedShapeSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const CompoundShapeSettings = opaque {
-    pub usingnamespace ShapeSettings.Methods(@This());
+    pub fn asShapeSettings(compound_shape_settings: *CompoundShapeSettings) *ShapeSettings {
+        return @ptrCast(compound_shape_settings);
+    }
 
     pub fn createStatic() !*CompoundShapeSettings {
-        const settings = c.JPC_StaticCompoundShapeSettings_Create();
-        if (settings == null) return error.FailedToCreateCompoundShapeSettings;
-        return @as(*CompoundShapeSettings, @ptrCast(settings));
+        return @ptrCast(c.JPC_StaticCompoundShapeSettings_Create() orelse
+            return error.FailedToCreateCompoundShapeSettings);
     }
 
     pub fn createMutable() !*CompoundShapeSettings {
-        const settings = c.JPC_MutableCompoundShapeSettings_Create();
-        if (settings == null) return error.FailedToCreateCompoundShapeSettings;
-        return @as(*CompoundShapeSettings, @ptrCast(settings));
+        return @ptrCast(c.JPC_MutableCompoundShapeSettings_Create() orelse
+            return error.FailedToCreateCompoundShapeSettings);
     }
 
-    pub fn addShape(settings: *CompoundShapeSettings, position: [3]f32, rotation: [4]f32, shape: *const ShapeSettings, user_data: u32) void {
+    pub fn addShape(
+        settings: *CompoundShapeSettings,
+        position: [3]f32,
+        rotation: [4]f32,
+        shape: *const ShapeSettings,
+        user_data: u32,
+    ) void {
         c.JPC_CompoundShapeSettings_AddShape(
-            @as(*c.JPC_CompoundShapeSettings, @ptrCast(settings)),
+            @ptrCast(settings),
             &position,
             &rotation,
-            @as(*const c.JPC_ShapeSettings, @ptrCast(shape)),
+            @ptrCast(shape),
             user_data,
         );
     }
@@ -3578,8 +3245,6 @@ pub const CompoundShapeSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const Shape = opaque {
-    pub usingnamespace Methods(@This());
-
     pub const Type = enum(c.JPC_ShapeType) {
         convex = c.JPC_SHAPE_TYPE_CONVEX,
         compound = c.JPC_SHAPE_TYPE_COMPOUND,
@@ -3649,113 +3314,106 @@ pub const Shape = opaque {
         return @as(*Shape, @ptrCast(shape));
     }
 
-    fn Methods(comptime T: type) type {
-        return struct {
-            pub fn asShape(shape: *const T) *const Shape {
-                return @as(*const Shape, @ptrCast(shape));
-            }
-            pub fn asShapeMut(shape: *T) *Shape {
-                return @as(*Shape, @ptrCast(shape));
-            }
+    pub fn addRef(shape: *Shape) void {
+        c.JPC_Shape_AddRef(@ptrCast(shape));
+    }
 
-            pub fn addRef(shape: *T) void {
-                c.JPC_Shape_AddRef(@as(*c.JPC_Shape, @ptrCast(shape)));
-            }
-            pub fn release(shape: *T) void {
-                c.JPC_Shape_Release(@as(*c.JPC_Shape, @ptrCast(shape)));
-            }
-            pub fn getRefCount(shape: *const T) u32 {
-                return c.JPC_Shape_GetRefCount(@as(*const c.JPC_Shape, @ptrCast(shape)));
-            }
+    pub fn release(shape: *Shape) void {
+        c.JPC_Shape_Release(@ptrCast(shape));
+    }
 
-            pub fn getType(shape: *const T) Type {
-                return @as(
-                    Type,
-                    @enumFromInt(c.JPC_Shape_GetType(@as(*const c.JPC_Shape, @ptrCast(shape)))),
-                );
-            }
-            pub fn getSubType(shape: *const T) SubType {
-                return @as(
-                    SubType,
-                    @enumFromInt(c.JPC_Shape_GetSubType(@as(*const c.JPC_Shape, @ptrCast(shape)))),
-                );
-            }
+    pub fn getRefCount(shape: *const Shape) u32 {
+        return c.JPC_Shape_GetRefCount(@ptrCast(shape));
+    }
 
-            pub fn getUserData(shape: *const T) u64 {
-                return c.JPC_Shape_GetUserData(@as(*const c.JPC_Shape, @ptrCast(shape)));
-            }
-            pub fn setUserData(shape: *T, user_data: u64) void {
-                return c.JPC_Shape_SetUserData(@as(*c.JPC_Shape, @ptrCast(shape)), user_data);
-            }
+    pub fn getType(shape: *const Shape) Type {
+        return @as(
+            Type,
+            @enumFromInt(c.JPC_Shape_GetType(@ptrCast(shape))),
+        );
+    }
 
-            pub fn getVolume(shape: *const T) f32 {
-                return c.JPC_Shape_GetVolume(@as(*const c.JPC_Shape, @ptrCast(shape)));
-            }
+    pub fn getSubType(shape: *const Shape) SubType {
+        return @as(
+            SubType,
+            @enumFromInt(c.JPC_Shape_GetSubType(@ptrCast(shape))),
+        );
+    }
 
-            pub fn getCenterOfMass(shape: *const T) [3]f32 {
-                var center: [3]f32 = undefined;
-                c.JPC_Shape_GetCenterOfMass(@as(*const c.JPC_Shape, @ptrCast(shape)), &center);
-                return center;
-            }
+    pub fn getUserData(shape: *const Shape) u64 {
+        return c.JPC_Shape_GetUserData(@ptrCast(shape));
+    }
 
-            pub fn getLocalBounds(shape: *const T) AABox {
-                const aabox = c.JPC_Shape_GetLocalBounds(@as(*const c.JPC_Shape, @ptrCast(shape)));
-                return @as(*AABox, @constCast(@ptrCast(&aabox))).*;
-            }
+    pub fn setUserData(shape: *Shape, user_data: u64) void {
+        return c.JPC_Shape_SetUserData(@ptrCast(shape), user_data);
+    }
 
-            pub fn getSurfaceNormal(shape: *const T, sub_shape_id: SubShapeId, local_pos: [3]f32) [3]f32 {
-                var normal: [3]f32 = undefined;
-                c.JPC_Shape_GetSurfaceNormal(
-                    @as(*const c.JPC_Shape, @ptrCast(shape)),
-                    sub_shape_id.toJpc(),
-                    &local_pos,
-                    &normal,
-                );
-                return normal;
-            }
+    pub fn getVolume(shape: *const Shape) f32 {
+        return c.JPC_Shape_GetVolume(@ptrCast(shape));
+    }
 
-            pub fn getSupportingFace(
-                shape: *const T,
-                sub_shape_id: SubShapeId,
-                direction: [3]f32,
-                shape_scale: [3]f32,
-                com_transform: [16]f32,
-            ) SupportingFace {
-                const c_face = c.JPC_Shape_GetSupportingFace(
-                    @as(*const c.JPC_Shape, @ptrCast(shape)),
-                    sub_shape_id.toJpc(),
-                    &direction,
-                    &shape_scale,
-                    &com_transform,
-                );
-                return @as(*const SupportingFace, @ptrCast(&c_face)).*;
-            }
+    pub fn getCenterOfMass(shape: *const Shape) [3]f32 {
+        var center: [3]f32 = undefined;
+        c.JPC_Shape_GetCenterOfMass(@ptrCast(shape), &center);
+        return center;
+    }
 
-            pub fn castRay(
-                shape: *const T,
-                ray: RayCast,
-                args: struct {
-                    sub_shape_id_creator: SubShapeIDCreator = .{},
-                },
-            ) struct { has_hit: bool, hit: RayCastResult } {
-                var hit: RayCastResult = .{};
-                const has_hit = c.JPC_Shape_CastRay(
-                    @as(*const c.JPC_Shape, @ptrCast(shape)),
-                    @as(*const c.JPC_RayCast, @ptrCast(&ray)),
-                    @as(*const c.JPC_SubShapeIDCreator, @ptrCast(&args.sub_shape_id_creator)),
-                    @as(*c.JPC_RayCastResult, @ptrCast(&hit)),
-                );
-                return .{ .has_hit = has_hit, .hit = hit };
-            }
+    pub fn getLocalBounds(shape: *const Shape) AABox {
+        const aabox = c.JPC_Shape_GetLocalBounds(@ptrCast(shape));
+        return @as(*AABox, @constCast(@ptrCast(&aabox))).*;
+    }
 
-            pub fn saveBinaryState(shape: *const T, stream_out: *StreamOut) void {
-                c.JPC_Shape_SaveBinaryState(@as(*const c.JPC_Shape, @ptrCast(shape)), stream_out);
-            }
+    pub fn getSurfaceNormal(shape: *const Shape, sub_shape_id: SubShapeId, local_pos: [3]f32) [3]f32 {
+        var normal: [3]f32 = undefined;
+        c.JPC_Shape_GetSurfaceNormal(
+            @ptrCast(shape),
+            sub_shape_id.toJpc(),
+            &local_pos,
+            &normal,
+        );
+        return normal;
+    }
 
-            pub fn saveWithChildrenAll(shape: *const T, stream_out: *StreamOut) void {
-                c.JPC_Shape_SaveWithChildren_All(@as(*const c.JPC_Shape, @ptrCast(shape)), stream_out);
-            }
-        };
+    pub fn getSupportingFace(
+        shape: *const Shape,
+        sub_shape_id: SubShapeId,
+        direction: [3]f32,
+        shape_scale: [3]f32,
+        com_transform: [16]f32,
+    ) SupportingFace {
+        const c_face = c.JPC_Shape_GetSupportingFace(
+            @ptrCast(shape),
+            sub_shape_id.toJpc(),
+            &direction,
+            &shape_scale,
+            &com_transform,
+        );
+        return @as(*const SupportingFace, @ptrCast(&c_face)).*;
+    }
+
+    pub fn castRay(
+        shape: *const Shape,
+        ray: RayCast,
+        args: struct {
+            sub_shape_id_creator: SubShapeIDCreator = .{},
+        },
+    ) struct { has_hit: bool, hit: RayCastResult } {
+        var hit: RayCastResult = .{};
+        const has_hit = c.JPC_Shape_CastRay(
+            @ptrCast(shape),
+            @ptrCast(&ray),
+            @ptrCast(&args.sub_shape_id_creator),
+            @ptrCast(&hit),
+        );
+        return .{ .has_hit = has_hit, .hit = hit };
+    }
+
+    pub fn saveBinaryState(shape: *const Shape, stream_out: *StreamOut) void {
+        c.JPC_Shape_SaveBinaryState(@ptrCast(shape), stream_out);
+    }
+
+    pub fn saveWithChildrenAll(shape: *const Shape, stream_out: *StreamOut) void {
+        c.JPC_Shape_SaveWithChildren_All(@ptrCast(shape), stream_out);
     }
 };
 
@@ -3765,15 +3423,22 @@ pub const Shape = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const BoxShape = opaque {
-    pub usingnamespace Shape.Methods(@This());
+    pub fn asShape(shape: *const BoxShape) *const Shape {
+        return @ptrCast(shape);
+    }
+
+    pub fn asShapeMut(shape: *BoxShape) *Shape {
+        return @ptrCast(shape);
+    }
 
     pub fn asBoxShape(shape: *const Shape) *const BoxShape {
         assert(shape.getSubType() == .box);
-        return @as(*const BoxShape, @ptrCast(shape));
+        return @ptrCast(shape);
     }
+
     pub fn asBoxShapeMut(shape: *Shape) *BoxShape {
         assert(shape.getSubType() == .box);
-        return @as(*BoxShape, @ptrCast(shape));
+        return @ptrCast(shape);
     }
 
     pub fn getHalfExtent(shape: *const BoxShape) [3]f32 {
@@ -3789,32 +3454,41 @@ pub const BoxShape = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const ConvexHullShape = opaque {
-    pub usingnamespace Shape.Methods(@This());
+    pub fn asShape(shape: *const BoxShape) *const Shape {
+        return @ptrCast(shape);
+    }
+
+    pub fn asShapeMut(shape: *BoxShape) *Shape {
+        return @ptrCast(shape);
+    }
 
     pub fn asConvexHullShape(shape: *const Shape) *const ConvexHullShape {
         assert(shape.getSubType() == .convex_hull);
-        return @as(*const ConvexHullShape, @ptrCast(shape));
+        return @ptrCast(shape);
     }
+
     pub fn asConvexHullShapeMut(shape: *Shape) *ConvexHullShape {
         assert(shape.getSubType() == .convex_hull);
-        return @as(*ConvexHullShape, @ptrCast(shape));
+        return @ptrCast(shape);
     }
 
     pub fn getNumPoints(shape: *const ConvexHullShape) u32 {
-        return c.JPC_ConvexHullShape_GetNumPoints(@as(*const c.JPC_ConvexHullShape, @ptrCast(shape)));
+        return c.JPC_ConvexHullShape_GetNumPoints(@ptrCast(shape));
     }
+
     pub fn getPoint(shape: *const ConvexHullShape, in_point_index: u32) [3]f32 {
         var point: [3]f32 = undefined;
-        c.JPC_ConvexHullShape_GetPoint(@as(*const c.JPC_ConvexHullShape, @ptrCast(shape)), in_point_index, &point);
+        c.JPC_ConvexHullShape_GetPoint(@ptrCast(shape), in_point_index, &point);
         return point;
     }
 
     pub fn getNumFaces(shape: *const ConvexHullShape) u32 {
-        return c.JPC_ConvexHullShape_GetNumFaces(@as(*const c.JPC_ConvexHullShape, @ptrCast(shape)));
+        return c.JPC_ConvexHullShape_GetNumFaces(@ptrCast(shape));
     }
+
     pub fn getNumVerticesInFace(shape: *const ConvexHullShape, in_face_index: u32) u32 {
         return c.JPC_ConvexHullShape_GetNumVerticesInFace(
-            @as(*const c.JPC_ConvexHullShape, @ptrCast(shape)),
+            @ptrCast(shape),
             in_face_index,
         );
     }
@@ -3824,9 +3498,9 @@ pub const ConvexHullShape = opaque {
     /// The return value gives the number of vertices in the face, identical to getNumVerticesInFace(in_face_index).
     pub fn getFaceVertices(shape: *const ConvexHullShape, in_face_index: u32, out_vertex_buffer: []u32) u32 {
         return c.JPC_ConvexHullShape_GetFaceVertices(
-            @as(*const c.JPC_ConvexHullShape, @ptrCast(shape)),
+            @ptrCast(shape),
             in_face_index,
-            @as(u32, @intCast(out_vertex_buffer.len)),
+            @intCast(out_vertex_buffer.len),
             out_vertex_buffer.ptr,
         );
     }
@@ -3837,37 +3511,27 @@ pub const ConvexHullShape = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const ConstraintSettings = opaque {
-    pub usingnamespace Methods(@This());
+    pub fn addRef(constraint_settings: *ConstraintSettings) void {
+        c.JPC_ConstraintSettings_AddRef(@ptrCast(constraint_settings));
+    }
 
-    fn Methods(comptime T: type) type {
-        return struct {
-            pub fn asConstraintSettings(constraint_settings: *const T) *const ConstraintSettings {
-                return @as(*const ConstraintSettings, @ptrCast(constraint_settings));
-            }
-            pub fn asConstraintSettingsMut(constraint_settings: *T) *ConstraintSettings {
-                return @as(*ConstraintSettings, @ptrCast(constraint_settings));
-            }
+    pub fn release(constraint_settings: *ConstraintSettings) void {
+        c.JPC_ConstraintSettings_Release(@ptrCast(constraint_settings));
+    }
 
-            pub fn addRef(constraint_settings: *T) void {
-                c.JPC_ConstraintSettings_AddRef(@as(*c.JPC_ConstraintSettings, @ptrCast(constraint_settings)));
-            }
-            pub fn release(constraint_settings: *T) void {
-                c.JPC_ConstraintSettings_Release(@as(*c.JPC_ConstraintSettings, @ptrCast(constraint_settings)));
-            }
-            pub fn getRefCount(constraint_settings: *const T) u32 {
-                return c.JPC_ConstraintSettings_GetRefCount(@as(*const c.JPC_ConstraintSettings, @ptrCast(constraint_settings)));
-            }
+    pub fn getRefCount(constraint_settings: *const ConstraintSettings) u32 {
+        return c.JPC_ConstraintSettings_GetRefCount(@ptrCast(constraint_settings));
+    }
 
-            pub fn getUserData(constraint_settings: *const T) u64 {
-                return c.JPC_ConstraintSettings_GetUserData(@as(*const c.JPC_ConstraintSettings, @ptrCast(constraint_settings)));
-            }
-            pub fn setUserData(constraint_settings: *T, user_data: u64) void {
-                return c.JPC_ConstraintSettings_SetUserData(
-                    @as(*c.JPC_ConstraintSettings, @ptrCast(constraint_settings)),
-                    user_data,
-                );
-            }
-        };
+    pub fn getUserData(constraint_settings: *const ConstraintSettings) u64 {
+        return c.JPC_ConstraintSettings_GetUserData(@ptrCast(constraint_settings));
+    }
+
+    pub fn setUserData(constraint_settings: *ConstraintSettings, user_data: u64) void {
+        return c.JPC_ConstraintSettings_SetUserData(
+            @ptrCast(constraint_settings),
+            user_data,
+        );
     }
 };
 //--------------------------------------------------------------------------------------------------
@@ -3876,27 +3540,24 @@ pub const ConstraintSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const TwoBodyConstraintSettings = opaque {
-    pub usingnamespace Methods(@This());
+    pub fn asConstraintSettings(self: *const TwoBodyConstraintSettings) *const ConstraintSettings {
+        return @ptrCast(self);
+    }
 
-    fn Methods(comptime T: type) type {
-        return struct {
-            pub usingnamespace ConstraintSettings.Methods(T);
+    pub fn asConstraintSettingsMut(self: *TwoBodyConstraintSettings) *ConstraintSettings {
+        return @ptrCast(self);
+    }
 
-            pub fn asTwoBodyConstraintSettings(two_body_constraint_settings: *T) *TwoBodyConstraintSettings {
-                return @as(*TwoBodyConstraintSettings, @ptrCast(two_body_constraint_settings));
-            }
-
-            pub fn createConstraint(two_body_constraint_settings: *const T, body1: *Body, body2: *Body) !*Constraint {
-                const constraint = c.JPC_TwoBodyConstraintSettings_CreateConstraint(
-                    @as(*const c.JPC_TwoBodyConstraintSettings, @ptrCast(two_body_constraint_settings)),
-                    @as(*c.JPC_Body, @ptrCast(body1)),
-                    @as(*c.JPC_Body, @ptrCast(body2)),
-                );
-                if (constraint == null)
-                    return error.FailedToCreateConstraint;
-                return @as(*Constraint, @ptrCast(constraint));
-            }
-        };
+    pub fn createConstraint(
+        self: *const TwoBodyConstraintSettings,
+        body1: *Body,
+        body2: *Body,
+    ) !*Constraint {
+        return @ptrCast(c.JPC_TwoBodyConstraintSettings_CreateConstraint(
+            @ptrCast(self),
+            @ptrCast(body1),
+            @ptrCast(body2),
+        ) orelse return error.FailedToCreateConstraint);
     }
 };
 //--------------------------------------------------------------------------------------------------
@@ -3905,12 +3566,9 @@ pub const TwoBodyConstraintSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const FixedConstraintSettings = opaque {
-    pub usingnamespace TwoBodyConstraintSettings.Methods(@This());
-
     pub fn create() !*FixedConstraintSettings {
-        const fixed_constraint_settings = c.JPC_FixedConstraintSettings_Create();
-        if (fixed_constraint_settings == null) return error.FailedToCreateFixedConstraintSettings;
-        return @as(*FixedConstraintSettings, @ptrCast(fixed_constraint_settings));
+        return @ptrCast(c.JPC_FixedConstraintSettings_Create() orelse
+            return error.FailedToCreateFixedConstraintSettings);
     }
 
     pub fn setSpace(settings: *FixedConstraintSettings, space: Constraint.Space) void {
@@ -3933,8 +3591,6 @@ pub const FixedConstraintSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const Constraint = opaque {
-    pub usingnamespace Methods(@This());
-
     pub const Type = enum(c.JPC_ConstraintType) {
         constraint = c.JPC_CONSTRAINT_TYPE_CONSTRAINT,
         two_body_constraint = c.JPC_CONSTRAINT_TYPE_TWO_BODY_CONSTRAINT,
@@ -3965,45 +3621,40 @@ pub const Constraint = opaque {
         world_space = c.JPC_CONSTRAINT_SPACE_WORLD_SPACE,
     };
 
-    fn Methods(comptime T: type) type {
-        return struct {
-            pub fn asConstraint(constraint: *const T) *const Constraint {
-                return @as(*const Constraint, @ptrCast(constraint));
-            }
-            pub fn asConstraintMut(constraint: *T) *Constraint {
-                return @as(*Constraint, @ptrCast(constraint));
-            }
+    // pub fn asConstraint(constraint: *const Constraint) *const Constraint {
+    //     return @ptrCast(constraint);
+    // }
 
-            pub fn addRef(constraint: *T) void {
-                c.JPC_Constraint_AddRef(@as(*c.JPC_Constraint, @ptrCast(constraint)));
-            }
-            pub fn release(constraint: *T) void {
-                c.JPC_Constraint_Release(@as(*c.JPC_Constraint, @ptrCast(constraint)));
-            }
-            pub fn getRefCount(constraint: *const T) u32 {
-                return c.JPC_Constraint_GetRefCount(@as(*const c.JPC_Constraint, @ptrCast(constraint)));
-            }
+    // pub fn asConstraintMut(constraint: *Constraint) *Constraint {
+    //     return @ptrCast(constraint);
+    // }
 
-            pub fn getType(constraint: *const T) Type {
-                return @as(
-                    Type,
-                    @enumFromInt(c.JPC_Constraint_GetType(@as(*const c.JPC_Constraint, @ptrCast(constraint)))),
-                );
-            }
-            pub fn getSubType(constraint: *const T) SubType {
-                return @as(
-                    SubType,
-                    @enumFromInt(c.JPC_Constraint_GetSubType(@as(*const c.JPC_Constraint, @ptrCast(constraint)))),
-                );
-            }
+    pub fn addRef(constraint: *Constraint) void {
+        c.JPC_Constraint_AddRef(@ptrCast(constraint));
+    }
 
-            pub fn getUserData(constraint: *const T) u64 {
-                return c.JPC_Constraint_GetUserData(@as(*const c.JPC_Constraint, @ptrCast(constraint)));
-            }
-            pub fn setUserData(constraint: *T, user_data: u64) void {
-                return c.JPC_Constraint_SetUserData(@as(*c.JPC_Constraint, @ptrCast(constraint)), user_data);
-            }
-        };
+    pub fn release(constraint: *Constraint) void {
+        c.JPC_Constraint_Release(@ptrCast(constraint));
+    }
+
+    pub fn getRefCount(constraint: *const Constraint) u32 {
+        return c.JPC_Constraint_GetRefCount(@ptrCast(constraint));
+    }
+
+    pub fn getType(constraint: *const Constraint) Type {
+        return @enumFromInt(c.JPC_Constraint_GetType(@ptrCast(constraint)));
+    }
+
+    pub fn getSubType(constraint: *const Constraint) SubType {
+        return @enumFromInt(c.JPC_Constraint_GetSubType(@ptrCast(constraint)));
+    }
+
+    pub fn getUserData(constraint: *const Constraint) u64 {
+        return c.JPC_Constraint_GetUserData(@ptrCast(constraint));
+    }
+
+    pub fn setUserData(constraint: *Constraint, user_data: u64) void {
+        return c.JPC_Constraint_SetUserData(@ptrCast(constraint), user_data);
     }
 };
 //--------------------------------------------------------------------------------------------------
@@ -4011,7 +3662,7 @@ pub const Constraint = opaque {
 // Memory allocation
 //
 //--------------------------------------------------------------------------------------------------
-fn zphysicsAlloc(size: usize) callconv(.C) ?*anyopaque {
+fn zphysicsAlloc(size: usize) callconv(.c) ?*anyopaque {
     state.?.mem_mutex.lock();
     defer state.?.mem_mutex.unlock();
 
@@ -4030,7 +3681,7 @@ fn zphysicsAlloc(size: usize) callconv(.C) ?*anyopaque {
     return ptr;
 }
 
-fn zphysicsRealloc(maybe_ptr: ?*anyopaque, reported_old_size: usize, new_size: usize) callconv(.C) ?*anyopaque {
+fn zphysicsRealloc(maybe_ptr: ?*anyopaque, reported_old_size: usize, new_size: usize) callconv(.c) ?*anyopaque {
     state.?.mem_mutex.lock();
     defer state.?.mem_mutex.unlock();
 
@@ -4056,7 +3707,7 @@ fn zphysicsRealloc(maybe_ptr: ?*anyopaque, reported_old_size: usize, new_size: u
     return mem.ptr;
 }
 
-fn zphysicsAlignedAlloc(size: usize, alignment: usize) callconv(.C) ?*anyopaque {
+fn zphysicsAlignedAlloc(size: usize, alignment: usize) callconv(.c) ?*anyopaque {
     state.?.mem_mutex.lock();
     defer state.?.mem_mutex.unlock();
 
@@ -4075,7 +3726,7 @@ fn zphysicsAlignedAlloc(size: usize, alignment: usize) callconv(.C) ?*anyopaque 
     return ptr;
 }
 
-fn zphysicsFree(maybe_ptr: ?*anyopaque) callconv(.C) void {
+fn zphysicsFree(maybe_ptr: ?*anyopaque) callconv(.c) void {
     if (maybe_ptr) |ptr| {
         state.?.mem_mutex.lock();
         defer state.?.mem_mutex.unlock();
@@ -4193,9 +3844,9 @@ test "zphysics.basic" {
     const my_object_should_collide = test_cb1.MyObjectLayerPairFilter{};
 
     const physics_system = try PhysicsSystem.create(
-        @as(*const BroadPhaseLayerInterface, @ptrCast(&my_broad_phase_layer_interface)),
-        @as(*const ObjectVsBroadPhaseLayerFilter, @ptrCast(&my_broad_phase_should_collide)),
-        @as(*const ObjectLayerPairFilter, @ptrCast(&my_object_should_collide)),
+        @ptrCast(&my_broad_phase_layer_interface),
+        @ptrCast(&my_broad_phase_should_collide),
+        @ptrCast(&my_object_should_collide),
         .{
             .max_bodies = 1024,
             .num_body_mutexes = 0,
@@ -4246,23 +3897,23 @@ test "zphysics.basic" {
     var box_shape_settings: ?*BoxShapeSettings = null;
     box_shape_settings = try BoxShapeSettings.create(.{ 1.0, 2.0, 3.0 });
     defer {
-        if (box_shape_settings) |bss| bss.release();
+        if (box_shape_settings) |bss| bss.asShapeSettings().release();
     }
 
-    box_shape_settings.?.setDensity(2.0);
-    try expect(box_shape_settings.?.getDensity() == 2.0);
+    box_shape_settings.?.asConvexShapeSettings().setDensity(2.0);
+    try expect(box_shape_settings.?.asConvexShapeSettings().getDensity() == 2.0);
 
-    box_shape_settings.?.setUserData(123);
-    try expect(box_shape_settings.?.getUserData() == 123);
+    box_shape_settings.?.asShapeSettings().setUserData(123);
+    try expect(box_shape_settings.?.asShapeSettings().getUserData() == 123);
 
     box_shape_settings.?.setConvexRadius(0.5);
     try expect(box_shape_settings.?.getConvexRadius() == 0.5);
 
-    try expect(box_shape_settings.?.getRefCount() == 1);
-    box_shape_settings.?.addRef();
-    try expect(box_shape_settings.?.getRefCount() == 2);
-    box_shape_settings.?.release();
-    try expect(box_shape_settings.?.getRefCount() == 1);
+    try expect(box_shape_settings.?.asShapeSettings().getRefCount() == 1);
+    box_shape_settings.?.asShapeSettings().addRef();
+    try expect(box_shape_settings.?.asShapeSettings().getRefCount() == 2);
+    box_shape_settings.?.asShapeSettings().release();
+    try expect(box_shape_settings.?.asShapeSettings().getRefCount() == 1);
 
     {
         var he = box_shape_settings.?.getHalfExtent();
@@ -4275,18 +3926,18 @@ test "zphysics.basic" {
     try expect(box_shape_settings.?.asConvexShapeSettings().getDensity() == 2.0);
     try expect(box_shape_settings.?.asShapeSettings().getRefCount() == 1);
 
-    const box_shape = try box_shape_settings.?.createShape();
+    const box_shape = try box_shape_settings.?.asShapeSettings().createShape();
     defer box_shape.release();
 
     {
-        const bs = try box_shape_settings.?.createShape();
+        const bs = try box_shape_settings.?.asShapeSettings().createShape();
         defer bs.release();
         try expect(bs == box_shape);
         try expect(bs.getRefCount() == 3);
     }
 
     try expect(box_shape.getRefCount() == 2);
-    box_shape_settings.?.release();
+    box_shape_settings.?.asShapeSettings().release();
     box_shape_settings = null;
     try expect(box_shape.getRefCount() == 1);
 
@@ -4314,20 +3965,20 @@ test "zphysics.shape.sphere" {
     defer physics_system.destroy();
 
     const sphere_shape_settings = try SphereShapeSettings.create(10.0);
-    defer sphere_shape_settings.release();
+    defer sphere_shape_settings.asShapeSettings().release();
 
     try expect(sphere_shape_settings.getRadius() == 10.0);
 
     sphere_shape_settings.setRadius(2.0);
     try expect(sphere_shape_settings.getRadius() == 2.0);
 
-    sphere_shape_settings.setDensity(2.0);
-    try expect(sphere_shape_settings.getDensity() == 2.0);
+    sphere_shape_settings.asConvexShapeSettings().setDensity(2.0);
+    try expect(sphere_shape_settings.asConvexShapeSettings().getDensity() == 2.0);
 
-    sphere_shape_settings.setMaterial(null);
-    try expect(sphere_shape_settings.getMaterial() == null);
+    sphere_shape_settings.asConvexShapeSettings().setMaterial(null);
+    try expect(sphere_shape_settings.asConvexShapeSettings().getMaterial() == null);
 
-    const sphere_shape = try sphere_shape_settings.createShape();
+    const sphere_shape = try sphere_shape_settings.asShapeSettings().createShape();
     defer sphere_shape.release();
 
     try expect(sphere_shape.getRefCount() == 2);
@@ -4355,7 +4006,7 @@ test "zphysics.shape.capsule" {
     defer physics_system.destroy();
 
     const capsule_shape_settings = try CapsuleShapeSettings.create(10.0, 2.0);
-    defer capsule_shape_settings.release();
+    defer capsule_shape_settings.asShapeSettings().release();
 
     try expect(capsule_shape_settings.getRadius() == 2.0);
     try expect(capsule_shape_settings.getHalfHeight() == 10.0);
@@ -4366,7 +4017,7 @@ test "zphysics.shape.capsule" {
     capsule_shape_settings.setHalfHeight(1.0);
     try expect(capsule_shape_settings.getHalfHeight() == 1.0);
 
-    const capsule_shape = try capsule_shape_settings.createShape();
+    const capsule_shape = try capsule_shape_settings.asShapeSettings().createShape();
     defer capsule_shape.release();
 
     try expect(capsule_shape.getRefCount() == 2);
@@ -4394,7 +4045,7 @@ test "zphysics.shape.taperedcapsule" {
     defer physics_system.destroy();
 
     const capsule_shape_settings = try TaperedCapsuleShapeSettings.create(10.0, 2.0, 3.0);
-    defer capsule_shape_settings.release();
+    defer capsule_shape_settings.asShapeSettings().release();
 
     try expect(capsule_shape_settings.getTopRadius() == 2.0);
     try expect(capsule_shape_settings.getBottomRadius() == 3.0);
@@ -4406,7 +4057,7 @@ test "zphysics.shape.taperedcapsule" {
     capsule_shape_settings.setBottomRadius(1.0);
     try expect(capsule_shape_settings.getBottomRadius() == 1.0);
 
-    const capsule_shape = try capsule_shape_settings.createShape();
+    const capsule_shape = try capsule_shape_settings.asShapeSettings().createShape();
     defer capsule_shape.release();
 
     try expect(capsule_shape.getRefCount() == 2);
@@ -4434,7 +4085,7 @@ test "zphysics.shape.cylinder" {
     defer physics_system.destroy();
 
     const cylinder_shape_settings = try CylinderShapeSettings.create(10.0, 2.0);
-    defer cylinder_shape_settings.release();
+    defer cylinder_shape_settings.asShapeSettings().release();
 
     try expect(cylinder_shape_settings.getRadius() == 2.0);
     try expect(cylinder_shape_settings.getHalfHeight() == 10.0);
@@ -4448,7 +4099,7 @@ test "zphysics.shape.cylinder" {
     cylinder_shape_settings.setConvexRadius(0.5);
     try expect(cylinder_shape_settings.getConvexRadius() == 0.5);
 
-    const cylinder_shape = try cylinder_shape_settings.createShape();
+    const cylinder_shape = try cylinder_shape_settings.asShapeSettings().createShape();
     defer cylinder_shape.release();
 
     try expect(cylinder_shape.getRefCount() == 2);
@@ -4478,12 +4129,12 @@ test "zphysics.shape.convexhull" {
     const points = [_]f32{ 0, 0, 0, 1, 1, 1, 1, 1, 0 };
 
     const settings = try ConvexHullShapeSettings.create(&points, 3, 12);
-    defer settings.release();
+    defer settings.asShapeSettings().release();
 
     settings.setMaxConvexRadius(0.1);
     try expect(settings.getMaxConvexRadius() == 0.1);
 
-    const shape = try settings.createShape();
+    const shape = try settings.asShapeSettings().createShape();
     defer shape.release();
 
     try expect(shape.getRefCount() == 2);
@@ -4514,7 +4165,7 @@ test "zphysics.shape.heightfield" {
 
     // Height field size is 4x4
     const settings = try HeightFieldShapeSettings.create(&points, 4);
-    defer settings.release();
+    defer settings.asShapeSettings().release();
 
     settings.setBlockSize(2);
     settings.setBitsPerSample(6);
@@ -4530,7 +4181,7 @@ test "zphysics.shape.heightfield" {
     try expect(settings.getScale()[1] == 5);
     try expect(settings.getScale()[2] == 6);
 
-    const shape = try settings.createShape();
+    const shape = try settings.asShapeSettings().createShape();
     defer shape.release();
 
     try expect(shape.getRefCount() == 2);
@@ -4561,14 +4212,14 @@ test "zphysics.shape.meshshape" {
     const indices = [3]u32{ 0, 1, 2 };
 
     const settings = try MeshShapeSettings.create(&vertices, 3, @sizeOf([3]f32), &indices);
-    defer settings.release();
+    defer settings.asShapeSettings().release();
 
     settings.setMaxTrianglesPerLeaf(4);
     settings.sanitize();
 
     try expect(settings.getMaxTrianglesPerLeaf() == 4);
 
-    const shape = try settings.createShape();
+    const shape = try settings.asShapeSettings().createShape();
     defer shape.release();
 
     try expect(shape.getRefCount() == 2);
@@ -4604,9 +4255,9 @@ test "zphysics.body.basic" {
     const body_interface = physics_system.getBodyInterface();
 
     const floor_shape_settings = try BoxShapeSettings.create(.{ 100.0, 1.0, 100.0 });
-    defer floor_shape_settings.release();
+    defer floor_shape_settings.asShapeSettings().release();
 
-    const floor_shape = try floor_shape_settings.createShape();
+    const floor_shape = try floor_shape_settings.asShapeSettings().createShape();
     defer floor_shape.release();
 
     var shape_ray = RayCast{ .origin = .{ 0, 2, 0, 1 }, .direction = .{ 101, -1, 0, 0 } };
@@ -4781,9 +4432,9 @@ test "zphysics.body.motion" {
     const lock_interface = physics_system.getBodyLockInterface();
 
     const shape_settings = try BoxShapeSettings.create(.{ 1.0, 2.0, 3.0 });
-    defer shape_settings.release();
+    defer shape_settings.asShapeSettings().release();
 
-    const shape = try shape_settings.createShape();
+    const shape = try shape_settings.asShapeSettings().createShape();
     defer shape.release();
 
     const body_settings = BodyCreationSettings{
@@ -4864,17 +4515,19 @@ test "zphysics.debugrenderer" {
     const my_object_should_collide = test_cb1.MyObjectLayerPairFilter{};
 
     const physics_system = try PhysicsSystem.create(
-        @as(*const BroadPhaseLayerInterface, @ptrCast(&my_broad_phase_layer_interface)),
-        @as(*const ObjectVsBroadPhaseLayerFilter, @ptrCast(&my_broad_phase_should_collide)),
-        @as(*const ObjectLayerPairFilter, @ptrCast(&my_object_should_collide)),
+        @ptrCast(&my_broad_phase_layer_interface),
+        @ptrCast(&my_broad_phase_should_collide),
+        @ptrCast(&my_object_should_collide),
         .{},
     );
     defer physics_system.destroy();
 
-    const shape_settings = try BoxShapeSettings.create(.{ 1.0, 2.0, 3.0 });
-    defer shape_settings.release();
+    try std.testing.expectEqual(24, my_debug_renderer.prim_head);
 
-    const shape = try shape_settings.createShape();
+    const shape_settings = try BoxShapeSettings.create(.{ 1.0, 2.0, 3.0 });
+    defer shape_settings.asShapeSettings().release();
+
+    const shape = try shape_settings.asShapeSettings().createShape();
     defer shape.release();
 
     const body_settings = BodyCreationSettings{
@@ -4898,6 +4551,7 @@ test "zphysics.debugrenderer" {
     defer DebugRenderer.destroyBodyDrawFilter(draw_filter);
 
     physics_system.drawBodies(&draw_settings, draw_filter);
+    try std.testing.expectEqual(1, my_debug_renderer.draw_geometry_count);
 }
 
 test "zphysics.serialization" {
@@ -4906,9 +4560,9 @@ test "zphysics.serialization" {
 
     const half_extents: [3]f32 = .{ 1.0, 2.0, 3.0 };
     const shape_settings = try BoxShapeSettings.create(half_extents);
-    defer shape_settings.release();
+    defer shape_settings.asShapeSettings().release();
 
-    const shape = try shape_settings.createShape();
+    const shape = try shape_settings.asShapeSettings().createShape();
     defer shape.release();
 
     var buf: std.ArrayListUnmanaged(u8) = .{};
@@ -4954,18 +4608,8 @@ const test_cb1 = struct {
     };
 
     const MyBroadphaseLayerInterface = extern struct {
-        usingnamespace BroadPhaseLayerInterface.Methods(@This());
-        __v: *const BroadPhaseLayerInterface.VTable = &vtable,
-
+        interface: BroadPhaseLayerInterface = .init(@This()),
         object_to_broad_phase: [object_layers.len]BroadPhaseLayer = undefined,
-
-        const vtable = BroadPhaseLayerInterface.VTable{
-            .getNumBroadPhaseLayers = _getNumBroadPhaseLayers,
-            .getBroadPhaseLayer = if (@import("builtin").abi == .msvc)
-                _getBroadPhaseLayerMsvc
-            else
-                _getBroadPhaseLayer,
-        };
 
         fn init() MyBroadphaseLayerInterface {
             var layer_interface: MyBroadphaseLayerInterface = .{};
@@ -4974,41 +4618,40 @@ const test_cb1 = struct {
             return layer_interface;
         }
 
-        fn _getNumBroadPhaseLayers(iself: *const BroadPhaseLayerInterface) callconv(.C) u32 {
-            const self = @as(*const MyBroadphaseLayerInterface, @ptrCast(iself));
-            return @as(u32, @intCast(self.object_to_broad_phase.len));
+        pub fn getNumBroadPhaseLayers(interface: *const BroadPhaseLayerInterface) callconv(.c) u32 {
+            const self: *const MyBroadphaseLayerInterface = @alignCast(@fieldParentPtr("interface", interface));
+            return @intCast(self.object_to_broad_phase.len);
         }
 
+        pub const getBroadPhaseLayer = if (builtin.abi == .msvc) _getBroadPhaseLayerMsvc else _getBroadPhaseLayer;
+
         fn _getBroadPhaseLayer(
-            iself: *const BroadPhaseLayerInterface,
+            interface: *const BroadPhaseLayerInterface,
             layer: ObjectLayer,
-        ) callconv(.C) BroadPhaseLayer {
-            const self = @as(*const MyBroadphaseLayerInterface, @ptrCast(iself));
-            return self.object_to_broad_phase[@as(usize, @intCast(layer))];
+        ) callconv(.c) BroadPhaseLayer {
+            const self: *const MyBroadphaseLayerInterface = @alignCast(@fieldParentPtr("interface", interface));
+            return self.object_to_broad_phase[@intCast(layer)];
         }
 
         fn _getBroadPhaseLayerMsvc(
-            iself: *const BroadPhaseLayerInterface,
+            interface: *const BroadPhaseLayerInterface,
             out_layer: *BroadPhaseLayer,
             layer: ObjectLayer,
-        ) callconv(.C) *const BroadPhaseLayer {
-            const self = @as(*const MyBroadphaseLayerInterface, @ptrCast(iself));
-            out_layer.* = self.object_to_broad_phase[@as(usize, @intCast(layer))];
+        ) callconv(.c) *const BroadPhaseLayer {
+            const self: *const MyBroadphaseLayerInterface = @alignCast(@fieldParentPtr("interface", interface));
+            out_layer.* = self.object_to_broad_phase[@intCast(layer)];
             return out_layer;
         }
     };
 
     const MyObjectVsBroadPhaseLayerFilter = extern struct {
-        usingnamespace ObjectVsBroadPhaseLayerFilter.Methods(@This());
-        __v: *const ObjectVsBroadPhaseLayerFilter.VTable = &vtable,
+        filter: ObjectVsBroadPhaseLayerFilter = .init(@This()),
 
-        const vtable = ObjectVsBroadPhaseLayerFilter.VTable{ .shouldCollide = _shouldCollide };
-
-        fn _shouldCollide(
+        pub fn shouldCollide(
             _: *const ObjectVsBroadPhaseLayerFilter,
             layer1: ObjectLayer,
             layer2: BroadPhaseLayer,
-        ) callconv(.C) bool {
+        ) callconv(.c) bool {
             return switch (layer1) {
                 object_layers.non_moving => layer2 == broad_phase_layers.moving,
                 object_layers.moving => true,
@@ -5018,16 +4661,13 @@ const test_cb1 = struct {
     };
 
     const MyObjectLayerPairFilter = extern struct {
-        usingnamespace ObjectLayerPairFilter.Methods(@This());
-        __v: *const ObjectLayerPairFilter.VTable = &vtable,
+        interface: ObjectLayerPairFilter = .init(@This()),
 
-        const vtable = ObjectLayerPairFilter.VTable{ .shouldCollide = _shouldCollide };
-
-        fn _shouldCollide(
+        pub fn shouldCollide(
             _: *const ObjectLayerPairFilter,
             object1: ObjectLayer,
             object2: ObjectLayer,
-        ) callconv(.C) bool {
+        ) callconv(.c) bool {
             return switch (object1) {
                 object_layers.non_moving => object2 == object_layers.moving,
                 object_layers.moving => true,
@@ -5037,15 +4677,12 @@ const test_cb1 = struct {
     };
 
     const MyPhysicsStepListener = extern struct {
-        usingnamespace PhysicsStepListener.Methods(@This());
-        __v: *const PhysicsStepListener.VTable = &vtable,
+        listener: PhysicsStepListener = .init(@This()),
         steps_heard: u32 = 0,
         physics_system: *PhysicsSystem,
 
-        const vtable = PhysicsStepListener.VTable{ .onStep = _onStep };
-
-        fn _onStep(psl: *PhysicsStepListener, context: *const PhysicsStepListenerContext) callconv(.C) void {
-            const self = @as(*MyPhysicsStepListener, @ptrCast(psl));
+        pub fn onStep(listener: *PhysicsStepListener, context: *const PhysicsStepListenerContext) callconv(.c) void {
+            const self: *MyPhysicsStepListener = @alignCast(@fieldParentPtr("listener", listener));
             assert(context.physics_system == self.physics_system);
             self.steps_heard += 1;
         }
@@ -5053,26 +4690,17 @@ const test_cb1 = struct {
 
     const MyDebugRenderer = if (!debug_renderer_enabled) void else extern struct {
         const MyRenderPrimitive = extern struct {
-            // Actual render data goes here
-            foobar: i32 = 0,
+            allocated: bool = false,
         };
 
-        usingnamespace DebugRenderer.Methods(@This());
-        __v: *const DebugRenderer.VTable(@This()) = &vtable,
+        const VTable = DebugRenderer.VTable(@This());
+        vtable: *const VTable = DebugRenderer.initVTable(@This()),
 
-        primitives: [32]MyRenderPrimitive = [_]MyRenderPrimitive{.{}} ** 32,
+        primitives: [32]MyRenderPrimitive = @splat(.{}),
         prim_head: i32 = -1,
+        draw_geometry_count: usize = 0,
 
-        const vtable = DebugRenderer.VTable(@This()){
-            .drawLine = drawLine,
-            .drawTriangle = drawTriangle,
-            .createTriangleBatch = createTriangleBatch,
-            .createTriangleBatchIndexed = createTriangleBatchIndexed,
-            .drawGeometry = drawGeometry,
-            .drawText3D = drawText3D,
-        };
-
-        pub fn shouldBodyDraw(_: *const Body) callconv(.C) bool {
+        pub fn shouldBodyDraw(_: *const Body) callconv(.c) bool {
             return true;
         }
 
@@ -5081,7 +4709,7 @@ const test_cb1 = struct {
             from: *const [3]Real,
             to: *const [3]Real,
             color: DebugRenderer.Color,
-        ) callconv(.C) void {
+        ) callconv(.c) void {
             _ = self;
             _ = from;
             _ = to;
@@ -5093,7 +4721,7 @@ const test_cb1 = struct {
             v2: *const [3]Real,
             v3: *const [3]Real,
             color: DebugRenderer.Color,
-        ) callconv(.C) void {
+        ) callconv(.c) void {
             _ = self;
             _ = v1;
             _ = v2;
@@ -5104,11 +4732,12 @@ const test_cb1 = struct {
             self: *MyDebugRenderer,
             triangles: [*]DebugRenderer.Triangle,
             triangle_count: u32,
-        ) callconv(.C) *anyopaque {
+        ) callconv(.c) *DebugRenderer.TriangleBatch {
             _ = triangles;
             _ = triangle_count;
             self.prim_head += 1;
-            const prim = &self.primitives[@as(usize, @intCast(self.prim_head))];
+            const prim = &self.primitives[@intCast(self.prim_head)];
+            prim.allocated = true;
             return DebugRenderer.createTriangleBatch(prim);
         }
         fn createTriangleBatchIndexed(
@@ -5117,14 +4746,23 @@ const test_cb1 = struct {
             vertex_count: u32,
             indices: [*]u32,
             index_count: u32,
-        ) callconv(.C) *anyopaque {
+        ) callconv(.c) *DebugRenderer.TriangleBatch {
             _ = vertices;
             _ = vertex_count;
             _ = indices;
             _ = index_count;
             self.prim_head += 1;
-            const prim = &self.primitives[@as(usize, @intCast(self.prim_head))];
+            const prim = &self.primitives[@intCast(self.prim_head)];
+            prim.allocated = true;
             return DebugRenderer.createTriangleBatch(prim);
+        }
+        fn destroyTriangleBatch(
+            self: *MyDebugRenderer,
+            batch: *anyopaque,
+        ) callconv(.c) void {
+            _ = self;
+            const primitive: *MyRenderPrimitive = @alignCast(@ptrCast(batch));
+            primitive.allocated = false;
         }
         fn drawGeometry(
             self: *MyDebugRenderer,
@@ -5136,8 +4774,7 @@ const test_cb1 = struct {
             cull_mode: DebugRenderer.CullMode,
             cast_shadow: DebugRenderer.CastShadow,
             draw_mode: DebugRenderer.DrawMode,
-        ) callconv(.C) void {
-            _ = self;
+        ) callconv(.c) void {
             _ = model_matrix;
             _ = world_space_bound;
             _ = lod_scale_sq;
@@ -5146,6 +4783,7 @@ const test_cb1 = struct {
             _ = cull_mode;
             _ = cast_shadow;
             _ = draw_mode;
+            self.draw_geometry_count += 1;
         }
         fn drawText3D(
             self: *MyDebugRenderer,
@@ -5153,7 +4791,7 @@ const test_cb1 = struct {
             string: [*:0]const u8,
             color: DebugRenderer.Color,
             height: f32,
-        ) callconv(.C) void {
+        ) callconv(.c) void {
             _ = self;
             _ = positions;
             _ = string;

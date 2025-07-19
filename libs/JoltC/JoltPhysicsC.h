@@ -1060,7 +1060,7 @@ typedef struct JPC_DebugRendererVTable
 
     // Optional
     void
-    (*DestroyTriangleBatch)(void *in_self, const void *in_primitive);
+    (*DestroyTriangleBatch)(void *in_self, void *in_primitive);
 
     // Required, *cannot* be NULL.
     void
