@@ -2,6 +2,7 @@
     .name = .zphysics,
     .fingerprint = 0x1def6aac00c4909d,
     .version = "0.2.0-dev",
+    .minimum_zig_version = "0.14.0",
     .paths = .{
         "build.zig",
         "build.zig.zon",
