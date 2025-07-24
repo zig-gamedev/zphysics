@@ -1090,7 +1090,7 @@ pub const DebugRenderer = if (!debug_renderer_enabled) extern struct {} else ext
             /// value that was passed to `DebugRenderer.createTriangleBatch`.
             destroyTriangleBatch: *const fn (
                 self: *T,
-                batch: *anyopaque,
+                batch: *TriangleBatch,
             ) callconv(.c) void,
             drawGeometry: *const fn (
                 self: *T,
