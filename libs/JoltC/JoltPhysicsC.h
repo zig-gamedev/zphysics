@@ -292,9 +292,19 @@ typedef enum JPC_ShapeColor {
 typedef uint16_t JPC_ObjectLayer;
 typedef uint8_t  JPC_BroadPhaseLayer;
 
+typedef struct JPC_BodyID
+{
+    uint32_t id;
+} JPC_BodyID;
+
+typedef struct JPC_SubShapeID
+{
+    uint32_t id;
+} JPC_SubShapeID;
+
+#define JPC_ID_EQ(a, b) (a.id == b.id)
+
 // TODO: Consider using structures for IDs
-typedef uint32_t JPC_BodyID;
-typedef uint32_t JPC_SubShapeID;
 typedef uint32_t JPC_CollisionGroupID;
 typedef uint32_t JPC_CollisionSubGroupID;
 
@@ -985,8 +995,6 @@ typedef struct JPC_CharacterContactListenerVTable
 
 typedef struct JPC_ContactListenerVTable
 {
-    _JPC_VTABLE_HEADER;
-
     // Optional, can be NULL.
     JPC_ValidateResult
     (*OnContactValidate)(void *in_self,
@@ -1050,7 +1058,7 @@ typedef struct JPC_DebugRendererVTable
 
     // Optional
     void
-    (*DestroyTriangleBatch)(void *in_self, const void *in_primitive);
+    (*DestroyTriangleBatch)(void *in_self, void *in_primitive);
 
     // Required, *cannot* be NULL.
     void
@@ -1384,9 +1392,9 @@ JPC_PhysicsSystem_GetActiveBodyIDs(const JPC_PhysicsSystem *in_physics_system,
 /// Access a body, will return NULL if the body ID is no longer valid.
 /// Use `JPC_PhysicsSystem_GetBodiesUnsafe()` to get an array of all body pointers.
 #define JPC_TRY_GET_BODY(all_body_ptrs, body_id) \
-    JPC_IS_VALID_BODY_POINTER(all_body_ptrs[body_id & JPC_BODY_ID_INDEX_BITS]) && \
-    all_body_ptrs[body_id & JPC_BODY_ID_INDEX_BITS]->id == body_id ? \
-    all_body_ptrs[body_id & JPC_BODY_ID_INDEX_BITS] : NULL
+    JPC_IS_VALID_BODY_POINTER(all_body_ptrs[body_id.id & JPC_BODY_ID_INDEX_BITS]) && \
+    all_body_ptrs[body_id.id & JPC_BODY_ID_INDEX_BITS]->id.id == body_id.id ? \
+    all_body_ptrs[body_id.id & JPC_BODY_ID_INDEX_BITS] : NULL
 
 /// Get direct access to all bodies. Not protected by a lock. Use with great care!
 JPC_API JPC_Body **
@@ -2063,7 +2071,13 @@ JPC_API void
 JPC_BodyInterface_ActivateBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_id);
 
 JPC_API void
+JPC_BodyInterface_ActivateBodies(JPC_BodyInterface *in_iface, const JPC_BodyID* in_body_ids, int in_num_bodies);
+
+JPC_API void
 JPC_BodyInterface_DeactivateBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_id);
+
+JPC_API void
+JPC_BodyInterface_DeactivateBodies(JPC_BodyInterface *in_iface, const JPC_BodyID* in_body_ids, int in_num_bodies);
 
 JPC_API bool
 JPC_BodyInterface_IsActive(const JPC_BodyInterface *in_iface, JPC_BodyID in_body_id);

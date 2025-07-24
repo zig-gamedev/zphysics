@@ -5,8 +5,6 @@
 #include <stdio.h>
 #include <string.h>
 
-//#define PRINT_OUTPUT
-
 // Object layers
 #define NUM_OBJ_LAYERS 2
 #define OBJ_LAYER_NON_MOVING 0
@@ -97,9 +95,9 @@ MyContactListener_OnContactValidate(void *in_self,
             "\tOnContactValidate(): in_base_offset (%f, %f, %f)\n",
             in_base_offset[0], in_base_offset[1], in_base_offset[2]);
     fprintf(stderr, "\tOnContactValidate(): penetration_depth (%f)\n", in_collision_result->penetration_depth);
-    fprintf(stderr, "\tOnContactValidate(): shape1_sub_shape_id (%d)\n", in_collision_result->shape1_sub_shape_id);
-    fprintf(stderr, "\tOnContactValidate(): shape2_sub_shape_id (%d)\n", in_collision_result->shape2_sub_shape_id);
-    fprintf(stderr, "\tOnContactValidate(): body2_id (%d)\n", in_collision_result->body2_id);
+    fprintf(stderr, "\tOnContactValidate(): shape1_sub_shape_id (%d)\n", in_collision_result->shape1_sub_shape_id.id);
+    fprintf(stderr, "\tOnContactValidate(): shape2_sub_shape_id (%d)\n", in_collision_result->shape2_sub_shape_id.id);
+    fprintf(stderr, "\tOnContactValidate(): body2_id (%d)\n", in_collision_result->body2_id.id);
 #endif
     return JPC_VALIDATE_RESULT_ACCEPT_ALL_CONTACTS;
 }
@@ -214,7 +212,7 @@ MyDebugRenderer_CreateTriangleBatch(void *in_self,
         (JPC_DebugRenderer_Primitive *)prim
         );
 #ifdef PRINT_OUTPUT
-    fprintf(stderr, "\tDebugRenderer: CreateTriangleBatch called. Created primitive %x\n", prim);
+    fprintf(stderr, "\tDebugRenderer: CreateTriangleBatch called. Created primitive %llx\n", (uint64_t)prim);
 #endif
     return batch;
 }
@@ -232,9 +230,19 @@ MyDebugRenderer_CreateTriangleBatchIndexed(void *in_self,
         (JPC_DebugRenderer_Primitive *)prim
         );
 #ifdef PRINT_OUTPUT
-    fprintf(stderr, "\tDebugRenderer: CreateTriangleBatchIndexed called. Created primitive %x\n", prim);
+    fprintf(stderr, "\tDebugRenderer: CreateTriangleBatchIndexed called. Created primitive %llx\n", (uint64_t)prim);
 #endif
     return batch;
+}
+
+static void
+MyDebugRenderer_DestroyTriangleBatch(void *in_self, void *in_batch)
+{
+    struct MyDebugRenderer *self = (struct MyDebugRenderer*) in_self;
+    struct MyRenderPrimitive *prim = (MyRenderPrimitive*)in_batch;
+#ifdef PRINT_OUTPUT
+    fprintf(stderr, "\tDebugRenderer: DestroyTriangleBatch called. Destroyed primitive %llx\n", (uint64_t)prim);
+#endif
 }
 
 static void
@@ -252,7 +260,7 @@ MyDebugRenderer_DrawGeometry(void *in_self,
     JPC_DebugRenderer_TriangleBatch *batch = in_geometry->LODs[0].batch;
     const JPC_DebugRenderer_Primitive *prim = JPC_DebugRenderer_TriangleBatch_GetPrimitive(batch);
 #ifdef PRINT_OUTPUT
-    fprintf(stderr, "\tDebugRenderer: DrawGeometry called for %x\n", prim);
+    fprintf(stderr, "\tDebugRenderer: DrawGeometry called for %llx\n", (uint64_t)prim);
 #endif
 }
 
@@ -277,6 +285,7 @@ MyDebugRenderer_Init(void)
               .DrawTriangle = MyDebugRenderer_DrawTriangle,
               .CreateTriangleBatch = MyDebugRenderer_CreateTriangleBatch,
               .CreateTriangleBatchIndexed = MyDebugRenderer_CreateTriangleBatchIndexed,
+              .DestroyTriangleBatch = MyDebugRenderer_DestroyTriangleBatch,
               .DrawGeometry = MyDebugRenderer_DrawGeometry,
               .DrawText3D = MyDebugRenderer_DrawText3D,
         };
@@ -541,8 +550,8 @@ JoltCTest_Basic2(void)
     JPC_Body *floor = JPC_BodyInterface_CreateBody(body_interface, &floor_settings);
     if (floor == NULL) return 0;
     const JPC_BodyID floor_id = JPC_Body_GetID(floor);
-    if (((floor_id & JPC_BODY_ID_SEQUENCE_BITS) >> JPC_BODY_ID_SEQUENCE_SHIFT) != 1) return 0;
-    if ((floor_id & JPC_BODY_ID_INDEX_BITS) != 0) return 0;
+    if (((floor_id.id & JPC_BODY_ID_SEQUENCE_BITS) >> JPC_BODY_ID_SEQUENCE_SHIFT) != 1) return 0;
+    if ((floor_id.id & JPC_BODY_ID_INDEX_BITS) != 0) return 0;
     if (JPC_Body_IsStatic(floor) == false) return 0;
     if (JPC_Body_IsDynamic(floor) == true) return 0;
 
@@ -551,8 +560,8 @@ JoltCTest_Basic2(void)
     JPC_Body *floor1 = JPC_BodyInterface_CreateBody(body_interface, &floor_settings);
     if (floor1 == NULL) return 0;
     const JPC_BodyID floor1_id = JPC_Body_GetID(floor1);
-    if (((floor1_id & JPC_BODY_ID_SEQUENCE_BITS) >> JPC_BODY_ID_SEQUENCE_SHIFT) != 1) return 0;
-    if ((floor1_id & JPC_BODY_ID_INDEX_BITS) != 1) return 0;
+    if (((floor1_id.id & JPC_BODY_ID_SEQUENCE_BITS) >> JPC_BODY_ID_SEQUENCE_SHIFT) != 1) return 0;
+    if ((floor1_id.id & JPC_BODY_ID_INDEX_BITS) != 1) return 0;
 
     if (JPC_BodyInterface_IsAdded(body_interface, floor_id) != false) return 0;
     if (JPC_BodyInterface_IsAdded(body_interface, floor1_id) != false) return 0;
@@ -688,8 +697,8 @@ JoltCTest_HelloWorld(void)
         uint32_t num_body_ids = 0;
         JPC_PhysicsSystem_GetBodyIDs(physics_system, 2, &num_body_ids, &body_ids[0]);
         if (num_body_ids != 2) return 0;
-        if (body_ids[0] != floor_id) return 0;
-        if (body_ids[1] != sphere_id) return 0;
+        if (!JPC_ID_EQ(body_ids[0], floor_id)) return 0;
+        if (!JPC_ID_EQ(body_ids[1], sphere_id)) return 0;
     }
 
     // Test JPC_PhysicsSystem_GetActiveBodyIDs()
@@ -698,7 +707,7 @@ JoltCTest_HelloWorld(void)
         uint32_t num_body_ids = 0;
         JPC_PhysicsSystem_GetActiveBodyIDs(physics_system, 2, &num_body_ids, &body_ids[0]);
         if (num_body_ids != 1) return 0;
-        if (body_ids[0] != sphere_id) return 0;
+        if (!JPC_ID_EQ(body_ids[0], sphere_id)) return 0;
     }
 
 #ifdef PRINT_OUTPUT
@@ -798,7 +807,7 @@ JoltCTest_HelloWorld(void)
             JPC_BodyLockInterface_LockRead(lock_iface, sphere_id, &lock);
             if (lock.body)
             {
-                JPC_Body *body = bodies[sphere_id & JPC_BODY_ID_INDEX_BITS];
+                JPC_Body *body = bodies[sphere_id.id & JPC_BODY_ID_INDEX_BITS];
                 if (!JPC_IS_VALID_BODY_POINTER(body)) return 0;
 
                 if (JPC_Body_IsDynamic(body) != true) return 0;
@@ -807,10 +816,10 @@ JoltCTest_HelloWorld(void)
                 if (body_checked == NULL) return 0;
 
                 if (body_checked != body) return 0;
-                if (body_checked->id != body->id) return 0;
+                if (!JPC_ID_EQ(body_checked->id, body->id)) return 0;
 
                 if (body != lock.body) return 0;
-                if (body->id != sphere_id) return 0;
+                if (!JPC_ID_EQ(body->id, sphere_id)) return 0;
             }
             JPC_BodyLockInterface_UnlockRead(lock_iface, &lock);
         }

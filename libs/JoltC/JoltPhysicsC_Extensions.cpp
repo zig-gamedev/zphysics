@@ -62,7 +62,7 @@ JPC_PhysicsSystem_GetBodyIDs(const JPC_PhysicsSystem *in_physics_system,
     for (const JPH::Body *b : physics_system->mBodyManager.mBodies)
         if (JPH::BodyManager::sIsValidBodyPointer(b))
         {
-            *out_body_ids = b->GetID().GetIndexAndSequenceNumber();
+            out_body_ids->id = b->GetID().GetIndexAndSequenceNumber();
             out_body_ids += 1;
             if (out_num_body_ids) *out_num_body_ids += 1;
             in_max_body_ids -= 1;
@@ -91,7 +91,7 @@ JPC_PhysicsSystem_GetActiveBodyIDs(const JPC_PhysicsSystem *in_physics_system,
     for (uint32_t i = 0; i < physics_system->mBodyManager.mNumActiveBodies[0]; ++i)
     {
         const JPH::BodyID body_id = physics_system->mBodyManager.mActiveBodies[0][i];
-        *out_body_ids = body_id.GetIndexAndSequenceNumber();
+        out_body_ids->id = body_id.GetIndexAndSequenceNumber();
         out_body_ids += 1;
         if (out_num_body_ids) *out_num_body_ids += 1;
         in_max_body_ids -= 1;
