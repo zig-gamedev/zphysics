@@ -1942,14 +1942,15 @@ pub const BodyInterface = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const NarrowPhaseQuery = opaque {
+    pub const CastRayArgs = struct {
+        broad_phase_layer_filter: ?*const BroadPhaseLayerFilter = null,
+        object_layer_filter: ?*const ObjectLayerFilter = null,
+        body_filter: ?*const BodyFilter = null,
+    };
     pub fn castRay(
         query: *const NarrowPhaseQuery,
         ray: RRayCast,
-        args: struct {
-            broad_phase_layer_filter: ?*const BroadPhaseLayerFilter = null,
-            object_layer_filter: ?*const ObjectLayerFilter = null,
-            body_filter: ?*const BodyFilter = null,
-        },
+        args: CastRayArgs,
     ) struct { has_hit: bool, hit: RayCastResult } {
         var hit: RayCastResult = .{};
         const has_hit = c.JPC_NarrowPhaseQuery_CastRay(
