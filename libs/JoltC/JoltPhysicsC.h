@@ -958,6 +958,23 @@ typedef struct JPC_CharacterContactListenerVTable
 
     // Required, *cannot* be NULL.
     void
+    (*OnContactPersisted)(void *in_self,
+                          const JPC_CharacterVirtual *in_character,
+                          const JPC_Body *in_body2,
+                          const JPC_SubShapeID *sub_shape_id,
+                          const JPC_Real contact_position[3],
+                          const float contact_normal[3],
+                          JPC_CharacterContactSettings *io_settings);
+
+    // Required, *cannot* be NULL.
+    void
+    (*OnContactRemoved)(void *in_self,
+                        const JPC_CharacterVirtual *in_character,
+                        const JPC_Body *in_body2,
+                        const JPC_SubShapeID *sub_shape_id);
+
+    // Required, *cannot* be NULL.
+    void
     (*OnCharacterContactAdded)(void *in_self,
                                const JPC_CharacterVirtual *in_character,
                                const JPC_CharacterVirtual *in_other_character,
@@ -965,6 +982,23 @@ typedef struct JPC_CharacterContactListenerVTable
                                const JPC_Real contact_position[3],
                                const float contact_normal[3],
                                JPC_CharacterContactSettings *io_settings);
+
+    // Required, *cannot* be NULL.
+    void
+    (*OnCharacterContactPersisted)(void *in_self,
+                                   const JPC_CharacterVirtual *in_character,
+                                   const JPC_CharacterVirtual *in_other_character,
+                                   const JPC_SubShapeID *sub_shape_id,
+                                   const JPC_Real contact_position[3],
+                                   const float contact_normal[3],
+                                   JPC_CharacterContactSettings *io_settings);
+
+    // Required, *cannot* be NULL.
+    void
+    (*OnCharacterContactRemoved)(void *in_self,
+                                 const JPC_CharacterVirtual *in_character,
+                                 const JPC_CharacterVirtual *in_other_character,
+                                 const JPC_SubShapeID *sub_shape_id);
 
     // Required, *cannot* be NULL.
     void

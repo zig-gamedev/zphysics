@@ -436,26 +436,26 @@ pub const CharacterContactListener = extern struct {
 
     pub const VTable = extern struct {
         __header: VTableHeader = .{},
-        OnAdjustBodyVelocity: *const fn (
+        onAdjustBodyVelocity: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
             body: *const Body,
             io_linear_velocity: *[3]f32,
             io_angular_velocity: *[3]f32,
         ) callconv(.c) void,
-        OnContactValidate: *const fn (
+        onContactValidate: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
             body: *const Body,
             sub_shape_id: *const SubShapeId,
         ) callconv(.c) bool,
-        OnCharacterContactValidate: *const fn (
+        onCharacterContactValidate: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
             other_character: *const CharacterVirtual,
             sub_shape_id: *const SubShapeId,
         ) callconv(.c) bool,
-        OnContactAdded: *const fn (
+        onContactAdded: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
             body: *const Body,
@@ -464,7 +464,22 @@ pub const CharacterContactListener = extern struct {
             contact_normal: *const [3]f32,
             io_settings: *CharacterContactSettings,
         ) callconv(.c) void,
-        OnCharacterContactAdded: *const fn (
+        onContactPersisted: *const fn (
+            self: *CharacterContactListener,
+            character: *const CharacterVirtual,
+            body: *const Body,
+            sub_shape_id: *const SubShapeId,
+            contact_position: *const [3]Real,
+            contact_normal: *const [3]f32,
+            io_settings: *CharacterContactSettings,
+        ) callconv(.c) void,
+        onContactRemoved: *const fn (
+            self: *CharacterContactListener,
+            character: *const CharacterVirtual,
+            body: *const Body,
+            sub_shape_id: *const SubShapeId,
+        ) callconv(.c) void,
+        onCharacterContactAdded: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
             other_character: *const CharacterVirtual,
@@ -473,7 +488,22 @@ pub const CharacterContactListener = extern struct {
             contact_normal: *const [3]f32,
             io_settings: *CharacterContactSettings,
         ) callconv(.c) void,
-        OnContactSolve: *const fn (
+        onCharacterContactPersisted: *const fn (
+            self: *CharacterContactListener,
+            character: *const CharacterVirtual,
+            other_character: *const CharacterVirtual,
+            sub_shape_id: *const SubShapeId,
+            contact_position: *const [3]Real,
+            contact_normal: *const [3]f32,
+            io_settings: *CharacterContactSettings,
+        ) callconv(.c) void,
+        onCharacterContactRemoved: *const fn (
+            self: *CharacterContactListener,
+            character: *const CharacterVirtual,
+            other_character: *const CharacterVirtual,
+            sub_shape_id: *const SubShapeId,
+        ) callconv(.c) void,
+        onContactSolve: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
             body: *const Body,
@@ -485,7 +515,7 @@ pub const CharacterContactListener = extern struct {
             character_velocity: *const [3]f32,
             character_velocity_out: *[3]f32,
         ) callconv(.c) void,
-        OnCharacterContactSolve: *const fn (
+        onCharacterContactSolve: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
             other_character: *const CharacterVirtual,
@@ -501,8 +531,8 @@ pub const CharacterContactListener = extern struct {
 
     comptime {
         assert(@sizeOf(VTable) == @sizeOf(c.JPC_CharacterContactListenerVTable));
-        assert(@offsetOf(VTable, "OnAdjustBodyVelocity") == @offsetOf(c.JPC_CharacterContactListenerVTable, "OnAdjustBodyVelocity"));
-        assert(@offsetOf(VTable, "OnContactSolve") == @offsetOf(c.JPC_CharacterContactListenerVTable, "OnContactSolve"));
+        assert(@offsetOf(VTable, "onAdjustBodyVelocity") == @offsetOf(c.JPC_CharacterContactListenerVTable, "OnAdjustBodyVelocity"));
+        assert(@offsetOf(VTable, "onContactSolve") == @offsetOf(c.JPC_CharacterContactListenerVTable, "OnContactSolve"));
     }
 };
 
@@ -3540,11 +3570,7 @@ pub const ConstraintSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const TwoBodyConstraintSettings = opaque {
-    pub fn asConstraintSettings(self: *const TwoBodyConstraintSettings) *const ConstraintSettings {
-        return @ptrCast(self);
-    }
-
-    pub fn asConstraintSettingsMut(self: *TwoBodyConstraintSettings) *ConstraintSettings {
+    pub fn asConstraintSettings(self: *TwoBodyConstraintSettings) *ConstraintSettings {
         return @ptrCast(self);
     }
 
@@ -3566,6 +3592,14 @@ pub const TwoBodyConstraintSettings = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 pub const FixedConstraintSettings = opaque {
+    pub fn asConstraintSettings(self: *FixedConstraintSettings) *ConstraintSettings {
+        return @ptrCast(self);
+    }
+
+    pub fn asTwoBodyConstraintSettings(self: *FixedConstraintSettings) *TwoBodyConstraintSettings {
+        return @ptrCast(self);
+    }
+
     pub fn create() !*FixedConstraintSettings {
         return @ptrCast(c.JPC_FixedConstraintSettings_Create() orelse
             return error.FailedToCreateFixedConstraintSettings);
