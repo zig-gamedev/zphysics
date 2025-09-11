@@ -148,7 +148,7 @@ fn initInterface(comptime T: type, comptime VTableT: type) *const VTableT {
                 }
             } else {
                 if (field.default_value_ptr) |default_value_ptr| {
-                    @field(vtable, field.name) = @as(*const field.type, @alignCast(@ptrCast(default_value_ptr))).*;
+                    @field(vtable, field.name) = @as(*const field.type, @ptrCast(@alignCast(default_value_ptr))).*;
                 } else @compileError("non-pointer vtable field " ++ field.name ++ " must have a default value");
             }
         }
@@ -184,24 +184,24 @@ pub const StreamOut = extern struct {
     }
 };
 
-pub const AnyWriterStreamOut = extern struct {
+pub const WriterStreamOut = extern struct {
     stream_out: StreamOut = .init(@This()),
-    writer: *const std.io.AnyWriter,
+    writer: *std.Io.Writer,
     failed: bool = false,
 
-    pub fn init(writer: *const std.io.AnyWriter) AnyWriterStreamOut {
+    pub fn init(writer: *std.Io.Writer) WriterStreamOut {
         return .{ .writer = writer };
     }
 
     pub fn writeBytes(stream_out: *StreamOut, data: [*]const u8, num_bytes: usize) callconv(.c) void {
-        const self: *AnyWriterStreamOut = @alignCast(@fieldParentPtr("stream_out", stream_out));
+        const self: *WriterStreamOut = @alignCast(@fieldParentPtr("stream_out", stream_out));
         self.writer.writeAll(data[0..num_bytes]) catch {
             self.failed = true;
         };
     }
 
     pub fn isFailed(stream_out: *StreamOut) callconv(.c) bool {
-        const self: *AnyWriterStreamOut = @alignCast(@fieldParentPtr("stream_out", stream_out));
+        const self: *WriterStreamOut = @alignCast(@fieldParentPtr("stream_out", stream_out));
         return self.failed;
     }
 };
@@ -225,19 +225,19 @@ pub const StreamIn = extern struct {
     }
 };
 
-pub const AnyReaderStreamIn = extern struct {
+pub const ReaderStreamIn = extern struct {
     stream_in: StreamIn = .init(@This()),
-    reader: *const std.io.AnyReader,
+    reader: *std.Io.Reader,
     failed: bool = false,
     eof: bool = false,
 
-    pub fn init(reader: *const std.io.AnyReader) AnyReaderStreamIn {
+    pub fn init(reader: *std.Io.Reader) ReaderStreamIn {
         return .{ .reader = reader };
     }
 
     pub fn readBytes(stream_in: *StreamIn, data: [*]u8, num_bytes: usize) callconv(.c) void {
         const self: *@This() = @alignCast(@fieldParentPtr("stream_in", stream_in));
-        self.reader.readNoEof(data[0..num_bytes]) catch |err| switch (err) {
+        self.reader.readSliceAll(data[0..num_bytes]) catch |err| switch (err) {
             error.EndOfStream => self.eof = true,
             else => self.failed = true,
         };
@@ -1509,8 +1509,12 @@ pub const PhysicsSystem = opaque {
         c.JPC_PhysicsSystem_DrawConstraintReferenceFrame(@ptrCast(physics_system));
     }
 
-    pub fn getBodyIds(physics_system: *const PhysicsSystem, body_ids: *std.ArrayList(BodyId)) !void {
-        try body_ids.ensureTotalCapacityPrecise(physics_system.getMaxBodies());
+    pub fn getBodyIds(
+        physics_system: *const PhysicsSystem,
+        allocator: std.mem.Allocator,
+        body_ids: *std.ArrayList(BodyId),
+    ) !void {
+        try body_ids.ensureTotalCapacityPrecise(allocator, physics_system.getMaxBodies());
         var num_body_ids: u32 = 0;
         c.JPC_PhysicsSystem_GetBodyIDs(
             @as(*const c.JPC_PhysicsSystem, @ptrCast(physics_system)),
@@ -1521,8 +1525,12 @@ pub const PhysicsSystem = opaque {
         body_ids.items.len = num_body_ids;
     }
 
-    pub fn getActiveBodyIds(physics_system: *const PhysicsSystem, body_ids: *std.ArrayList(BodyId)) !void {
-        try body_ids.ensureTotalCapacityPrecise(physics_system.getMaxBodies());
+    pub fn getActiveBodyIds(
+        physics_system: *const PhysicsSystem,
+        allocator: std.mem.Allocator,
+        body_ids: *std.ArrayList(BodyId),
+    ) !void {
+        try body_ids.ensureTotalCapacityPrecise(allocator, physics_system.getMaxBodies());
         var num_body_ids: u32 = 0;
         c.JPC_PhysicsSystem_GetActiveBodyIDs(
             @as(*const c.JPC_PhysicsSystem, @ptrCast(physics_system)),
@@ -1618,6 +1626,8 @@ pub const BodyLockWrite = extern struct {
 //
 //--------------------------------------------------------------------------------------------------
 pub const BodyInterface = opaque {
+    pub const AddState = *opaque {};
+
     pub fn createBody(body_iface: *BodyInterface, settings: BodyCreationSettings) !*Body {
         const body = c.JPC_BodyInterface_CreateBody(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
@@ -1644,6 +1654,33 @@ pub const BodyInterface = opaque {
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
             body_id.toJpc(),
         );
+    }
+
+    pub fn addBodiesAbort(body_iface: *BodyInterface, body_ids: []BodyId, add_state: AddState) void {
+        c.JPC_BodyInterface_AddBodiesAbort(
+            @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
+            @ptrCast(body_ids.ptr),
+            @intCast(body_ids.len),
+            @ptrCast(add_state),
+        );
+    }
+
+    pub fn addBodiesFinalize(body_iface: *BodyInterface, body_ids: []BodyId, add_state: AddState, mode: Activation) void {
+        c.JPC_BodyInterface_AddBodiesFinalize(
+            @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
+            @ptrCast(body_ids.ptr),
+            @intCast(body_ids.len),
+            @ptrCast(add_state),
+            @intFromEnum(mode),
+        );
+    }
+
+    pub fn addBodiesPrepare(body_iface: *BodyInterface, body_ids: []BodyId) AddState {
+        return @ptrCast(c.JPC_BodyInterface_AddBodiesPrepare(
+            @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
+            @ptrCast(body_ids.ptr),
+            @intCast(body_ids.len),
+        ));
     }
 
     pub fn addBody(body_iface: *BodyInterface, body_id: BodyId, mode: Activation) void {
@@ -3390,7 +3427,7 @@ pub const Shape = opaque {
 
     pub fn getLocalBounds(shape: *const Shape) AABox {
         const aabox = c.JPC_Shape_GetLocalBounds(@ptrCast(shape));
-        return @as(*AABox, @constCast(@ptrCast(&aabox))).*;
+        return @as(*AABox, @ptrCast(@constCast(&aabox))).*;
     }
 
     pub fn getSurfaceNormal(shape: *const Shape, sub_shape_id: SubShapeId, local_pos: [3]f32) [3]f32 {
@@ -4356,18 +4393,18 @@ test "zphysics.body.basic" {
     }
 
     {
-        var body_ids = std.ArrayList(BodyId).init(std.testing.allocator);
-        defer body_ids.deinit();
-        try physics_system.getBodyIds(&body_ids);
+        var body_ids: std.ArrayList(BodyId) = .empty;
+        defer body_ids.deinit(std.testing.allocator);
+        try physics_system.getBodyIds(std.testing.allocator, &body_ids);
         try expect(body_ids.items.len == 1);
         try expect(body_ids.capacity >= physics_system.getMaxBodies());
         try expect(body_ids.items[0] == body_id);
     }
 
     {
-        var body_ids = std.ArrayList(BodyId).init(std.testing.allocator);
-        defer body_ids.deinit();
-        try physics_system.getActiveBodyIds(&body_ids);
+        var body_ids: std.ArrayList(BodyId) = .empty;
+        defer body_ids.deinit(std.testing.allocator);
+        try physics_system.getActiveBodyIds(std.testing.allocator, &body_ids);
         try expect(body_ids.items.len == 0);
         try expect(body_ids.capacity >= physics_system.getMaxBodies());
     }
@@ -4599,20 +4636,18 @@ test "zphysics.serialization" {
     const shape = try shape_settings.asShapeSettings().createShape();
     defer shape.release();
 
-    var buf: std.ArrayListUnmanaged(u8) = .{};
-    defer buf.deinit(std.testing.allocator);
+    var buf: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer buf.deinit();
 
     {
-        const writer = buf.writer(std.testing.allocator).any();
-        var stream_out = AnyWriterStreamOut.init(&writer);
+        var stream_out = WriterStreamOut.init(&buf.writer);
         shape.saveBinaryState(@ptrCast(&stream_out));
-        try std.testing.expectEqual(1 + 8 + 4 + 12 + 4, buf.items.len);
+        try std.testing.expectEqual(1 + 8 + 4 + 12 + 4, buf.written().len);
     }
 
     {
-        var stream = std.io.fixedBufferStream(buf.items);
-        const reader = stream.reader().any();
-        var stream_in = AnyReaderStreamIn.init(&reader);
+        var reader: std.Io.Reader = .fixed(buf.written());
+        var stream_in = ReaderStreamIn.init(&reader);
         const shape_restored = try Shape.restoreFromBinaryState(@ptrCast(&stream_in));
         defer shape_restored.release();
 
@@ -4795,7 +4830,7 @@ const test_cb1 = struct {
             batch: *anyopaque,
         ) callconv(.c) void {
             _ = self;
-            const primitive: *MyRenderPrimitive = @alignCast(@ptrCast(batch));
+            const primitive: *MyRenderPrimitive = @ptrCast(@alignCast(batch));
             primitive.allocated = false;
         }
         fn drawGeometry(

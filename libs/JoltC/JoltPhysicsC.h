@@ -330,6 +330,7 @@ typedef bool (*JPC_AssertFailedFunction)(
 typedef struct JPC_TempAllocator     JPC_TempAllocator;
 typedef struct JPC_JobSystem         JPC_JobSystem;
 typedef struct JPC_BodyInterface     JPC_BodyInterface;
+typedef struct JPC_BodyInterface_AddState JPC_BodyInterface_AddState;
 typedef struct JPC_BodyLockInterface JPC_BodyLockInterface;
 typedef struct JPC_NarrowPhaseQuery  JPC_NarrowPhaseQuery;
 
@@ -2025,6 +2026,22 @@ JPC_BodyInterface_CreateBodyWithID(JPC_BodyInterface *in_iface,
 
 JPC_API void
 JPC_BodyInterface_DestroyBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_id);
+
+JPC_API void
+JPC_BodyInterface_AddBodiesAbort(JPC_BodyInterface *in_iface,
+                                 JPC_BodyID* in_body_ids,
+                                 int in_num_bodies,
+                                 JPC_BodyInterface_AddState* add_state);
+
+JPC_API void
+JPC_BodyInterface_AddBodiesFinalize(JPC_BodyInterface *in_iface,
+                                    JPC_BodyID* in_body_ids,
+                                    int in_num_bodies,
+                                    JPC_BodyInterface_AddState* add_state,
+                                    JPC_Activation in_mode);
+
+JPC_API JPC_BodyInterface_AddState*
+JPC_BodyInterface_AddBodiesPrepare(JPC_BodyInterface *in_iface, JPC_BodyID* in_body_ids, int in_num_bodies);
 
 JPC_API void
 JPC_BodyInterface_AddBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_id, JPC_Activation in_mode);
