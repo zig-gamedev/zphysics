@@ -302,6 +302,7 @@ FN(toJpc)(JPH::CollisionGroup *in) { assert(in); return reinterpret_cast<JPC_Col
 
 FN(toJph)(const JPC_SubShapeID *in) { assert(in); return reinterpret_cast<const JPH::SubShapeID *>(in); }
 FN(toJph)(const JPC_BodyID *in) { assert(in); return reinterpret_cast<const JPH::BodyID *>(in); }
+FN(toJph)(JPC_BodyID *in) { assert(in); return reinterpret_cast<JPH::BodyID *>(in); }
 
 FN(toJpc)(const JPH::SubShapeIDCreator *in) { assert(in); return reinterpret_cast<const JPC_SubShapeIDCreator *>(in); }
 FN(toJph)(const JPC_SubShapeIDCreator *in) { assert(in); return reinterpret_cast<const JPH::SubShapeIDCreator *>(in); }
@@ -352,6 +353,9 @@ FN(toJpc)(const JPH::BodyInterface *in) { assert(in); return reinterpret_cast<co
 FN(toJph)(const JPC_BodyInterface *in) { assert(in); return reinterpret_cast<const JPH::BodyInterface *>(in); }
 FN(toJpc)(JPH::BodyInterface *in) { assert(in); return reinterpret_cast<JPC_BodyInterface *>(in); }
 FN(toJph)(JPC_BodyInterface *in) { assert(in); return reinterpret_cast<JPH::BodyInterface *>(in); }
+
+FN(toJpc)(JPH::BodyInterface::AddState in) { assert(in); return reinterpret_cast<JPC_BodyInterface_AddState* >(in); }
+FN(toJph)(JPC_BodyInterface_AddState* in) { assert(in); return reinterpret_cast<JPH::BodyInterface::AddState >(in); }
 
 FN(toJpc)(const JPH::TransformedShape *in) { assert(in); return reinterpret_cast<const JPC_TransformedShape *>(in); }
 
@@ -2353,6 +2357,31 @@ JPC_API void
 JPC_BodyInterface_DestroyBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_id)
 {
     toJph(in_iface)->DestroyBody(toJph(in_body_id));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_BodyInterface_AddBodiesAbort(JPC_BodyInterface *in_iface,
+                                 JPC_BodyID* in_body_ids,
+                                 int in_num_bodies,
+                                 JPC_BodyInterface_AddState* add_state)
+{
+    return toJph(in_iface)->AddBodiesAbort(toJph(in_body_ids), in_num_bodies, toJph(add_state));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_BodyInterface_AddBodiesFinalize(JPC_BodyInterface *in_iface,
+                                    JPC_BodyID* in_body_ids,
+                                    int in_num_bodies,
+                                    JPC_BodyInterface_AddState* add_state,
+                                    JPC_Activation in_mode)
+{
+    return toJph(in_iface)->AddBodiesFinalize(toJph(in_body_ids), in_num_bodies, toJph(add_state), static_cast<JPH::EActivation>(in_mode));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_BodyInterface_AddState*
+JPC_BodyInterface_AddBodiesPrepare(JPC_BodyInterface *in_iface, JPC_BodyID* in_body_ids, int in_num_bodies)
+{
+    return toJpc(toJph(in_iface)->AddBodiesPrepare(toJph(in_body_ids), in_num_bodies));
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API void
