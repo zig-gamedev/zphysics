@@ -354,8 +354,8 @@ FN(toJph)(const JPC_BodyInterface *in) { assert(in); return reinterpret_cast<con
 FN(toJpc)(JPH::BodyInterface *in) { assert(in); return reinterpret_cast<JPC_BodyInterface *>(in); }
 FN(toJph)(JPC_BodyInterface *in) { assert(in); return reinterpret_cast<JPH::BodyInterface *>(in); }
 
-FN(toJpc)(JPH::BodyInterface::AddState in) { assert(in); return reinterpret_cast<JPC_BodyInterface_AddState* >(in); }
-FN(toJph)(JPC_BodyInterface_AddState* in) { assert(in); return reinterpret_cast<JPH::BodyInterface::AddState >(in); }
+FN(toJpc)(JPH::BodyInterface::AddState in) { return reinterpret_cast<JPC_BodyInterface_AddState* >(in); }
+FN(toJph)(JPC_BodyInterface_AddState* in) { return reinterpret_cast<JPH::BodyInterface::AddState >(in); }
 
 FN(toJpc)(const JPH::TransformedShape *in) { assert(in); return reinterpret_cast<const JPC_TransformedShape *>(in); }
 
@@ -2360,6 +2360,12 @@ JPC_BodyInterface_DestroyBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_id
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API void
+JPC_BodyInterface_DestroyBodies(JPC_BodyInterface *in_iface, JPC_BodyID* in_body_ids, int in_num_bodies)
+{
+    toJph(in_iface)->DestroyBodies(toJph(in_body_ids), in_num_bodies);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
 JPC_BodyInterface_AddBodiesAbort(JPC_BodyInterface *in_iface,
                                  JPC_BodyID* in_body_ids,
                                  int in_num_bodies,
@@ -2394,6 +2400,12 @@ JPC_API void
 JPC_BodyInterface_RemoveBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_id)
 {
     toJph(in_iface)->RemoveBody(toJph(in_body_id));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_BodyInterface_RemoveBodies(JPC_BodyInterface *in_iface, JPC_BodyID* in_body_ids, int in_num_bodies)
+{
+    toJph(in_iface)->RemoveBodies(toJph(in_body_ids), in_num_bodies);
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API JPC_BodyID
@@ -2562,6 +2574,20 @@ JPC_API bool
 JPC_BodyInterface_IsActive(const JPC_BodyInterface *in_iface, JPC_BodyID in_body_id)
 {
     return toJph(in_iface)->IsActive(toJph(in_body_id));
+}
+
+JPC_API void
+JPC_BodyInterface_SetShape(const JPC_BodyInterface *in_iface,
+                           JPC_BodyID in_body_id,
+                           const JPC_Shape* in_shape,
+                           bool in_update_mass_properties,
+                           JPC_Activation in_activation_mode)
+{
+    toJph(in_iface)->SetShape(
+        toJph(in_body_id),
+        toJph(in_shape),
+        in_update_mass_properties,
+        static_cast<JPH::EActivation>(in_activation_mode));
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API void
