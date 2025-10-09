@@ -92,7 +92,7 @@ pub const VTableHeader = switch (@import("builtin").abi) {
         __header: ?*const anyopaque = null,
     },
     else => extern struct {
-        __header: [2]?*const anyopaque = [_]?*const anyopaque{null} ** 2,
+        __header: [2]?*const anyopaque = @splat(null),
     },
 };
 
@@ -665,7 +665,7 @@ pub const ContactSettings = extern struct {
 
 pub const MassProperties = extern struct {
     mass: f32 = 0.0,
-    inertia: [16]f32 align(16) = [_]f32{0} ** 16,
+    inertia: [16]f32 align(16) = @splat(0),
 
     comptime {
         assert(@sizeOf(MassProperties) == @sizeOf(c.JPC_MassProperties));

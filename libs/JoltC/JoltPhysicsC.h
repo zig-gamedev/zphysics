@@ -42,13 +42,13 @@ typedef float JPC_Real;
     #define JPC_DEBUG_RENDERER 0
 #endif
 
-#define _JPC_REFTARGET_HEADER struct { const void * __vfptr_header[1]; uint32_t ref_count; };
+#define _JPC_REFTARGET_HEADER struct { const void * __vfptr_header[1]; uint32_t ref_count; }
 
 #if defined(_MSC_VER)
 #define _JPC_VTABLE_HEADER const void* __vtable_header[1]
 // MSVC quirk: If the first member of a derived class has alignment > 8, then extra padding is inserted such that
 //             the first member of the base class has the same alignment.
-#define _JPC_REFTARGET_HEADER_ALIGN_16 struct { const void * __vtable_ptr[2]; uint32_t ref_count; };
+#define _JPC_REFTARGET_HEADER_ALIGN_16 struct { const void * __vtable_ptr[2]; uint32_t ref_count; }
 #else
 #define _JPC_VTABLE_HEADER const void* __vtable_header[2]
 #define _JPC_REFTARGET_HEADER_ALIGN_16 _JPC_REFTARGET_HEADER
