@@ -1656,7 +1656,7 @@ pub const BodyInterface = opaque {
         );
     }
 
-    pub fn destroyBodies(body_iface: *BodyInterface, body_ids: []BodyId) void {
+    pub fn destroyBodies(body_iface: *BodyInterface, body_ids: []const BodyId) void {
         c.JPC_BodyInterface_DestroyBodies(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
             @ptrCast(body_ids.ptr),

@@ -2028,7 +2028,7 @@ JPC_API void
 JPC_BodyInterface_DestroyBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_id);
 
 JPC_API void
-JPC_BodyInterface_DestroyBodies(JPC_BodyInterface *in_iface, JPC_BodyID* in_body_ids, int in_num_bodies);
+JPC_BodyInterface_DestroyBodies(JPC_BodyInterface *in_iface, const JPC_BodyID* in_body_ids, int in_num_bodies);
 
 JPC_API void
 JPC_BodyInterface_AddBodiesAbort(JPC_BodyInterface *in_iface,
