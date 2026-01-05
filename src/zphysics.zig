@@ -784,15 +784,24 @@ pub const MotionQuality = enum(c.JPC_MotionQuality) {
 };
 
 /// NOTE: Enum values designed for bitwise combinations in the C tradition
-pub const AllowedDOFs = enum(c.JPC_AllowedDOFs) {
-    none = c.JPC_ALLOWED_DOFS_NONE, // 0b000000
-    all = c.JPC_ALLOWED_DOFS_ALL, // 0b111111
-    translation_x = c.JPC_ALLOWED_DOFS_TRANSLATION_X, // 0b000001
-    translation_y = c.JPC_ALLOWED_DOFS_TRANSLATION_Y, // 0b000010
-    translation_z = c.JPC_ALLOWED_DOFS_TRANSLATION_Z, // 0b000100
-    rotation_x = c.JPC_ALLOWED_DOFS_ROTATION_X, // 0b001000
-    rotation_y = c.JPC_ALLOWED_DOFS_ROTATION_Y, // 0b010000
-    rotation_z = c.JPC_ALLOWED_DOFS_ROTATION_Z, // 0b100000
+pub const AllowedDOFs = packed struct(c.JPC_AllowedDOFs) {
+    translation_x: bool = false, // 0b00000001
+    translation_y: bool = false, // 0b00000010
+    translation_z: bool = false, // 0b00000100
+    rotation_x: bool = false, // 0b00001000
+    rotation_y: bool = false, // 0b00010000
+    rotation_z: bool = false, // 0b00100000
+    _padding: u2 = 0, // unused bits
+
+    pub const none: AllowedDOFs = .{}; // 0b00000000
+    pub const all: AllowedDOFs = .{
+        .translation_x = true,
+        .translation_y = true,
+        .translation_z = true,
+        .rotation_x = true,
+        .rotation_y = true,
+        .rotation_z = true,
+    }; // 0b00111111
 };
 
 pub const OverrideMassProperties = enum(c.JPC_OverrideMassProperties) {
