@@ -2689,7 +2689,7 @@ pub const MotionProperties = extern struct {
     ) void {
         c.JPC_MotionProperties_SetMassProperties(
             @as(*c.JPC_MotionProperties, @ptrCast(motion)),
-            @intFromEnum(allowed_DOFs),
+            @bitCast(allowed_DOFs),
             @as(*const c.JPC_MassProperties, @ptrCast(&mass_properties)),
         );
     }
