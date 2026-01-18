@@ -2119,6 +2119,14 @@ JPC_BodyInterface_SetRotation(JPC_BodyInterface *in_iface,
                               const float in_rotation[4],
                               JPC_Activation in_activation);
 JPC_API void
+JPC_BodyInterface_SetShape(JPC_BodyInterface *in_iface,
+                           JPC_BodyID in_body_id,
+                           const JPC_Shape * in_shape,
+                           bool in_update_mass_properties,
+                           JPC_Activation in_activation);
+JPC_API const JPC_Shape *
+JPC_BodyInterface_GetShape(const JPC_BodyInterface *in_iface, JPC_BodyID in_body_id);
+JPC_API void
 JPC_BodyInterface_ActivateBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_id);
 
 JPC_API void

@@ -2535,6 +2535,23 @@ JPC_BodyInterface_GetRotation(const JPC_BodyInterface *in_iface,
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API void
+JPC_BodyInterface_SetShape(JPC_BodyInterface *in_iface,
+                           JPC_BodyID in_body_id,
+                           const JPC_Shape * in_shape,
+                           bool in_update_mass_properties,
+                           JPC_Activation in_activation)
+{
+    toJph(in_iface)->SetShape(toJph(in_body_id), toJph(in_shape), in_update_mass_properties, static_cast<JPH::EActivation>(in_activation));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API const JPC_Shape *
+JPC_BodyInterface_GetShape(const JPC_BodyInterface *in_iface,
+                           JPC_BodyID in_body_id)
+{
+    toJph(in_iface)->GetShape(toJph(in_body_id));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
 JPC_BodyInterface_ActivateBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_id)
 {
     toJph(in_iface)->ActivateBody(toJph(in_body_id));

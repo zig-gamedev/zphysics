@@ -1909,6 +1909,32 @@ pub const BodyInterface = opaque {
         );
     }
 
+    pub fn getShape(
+        body_iface: *BodyInterface,
+        body_id: BodyId,
+    ) *const Shape {
+        return @as(*const Shape, @ptrCast(c.JPC_BodyInterface_GetShape(
+            @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
+            body_id.toJpc(),
+        )));
+    }
+
+    pub fn setShape(
+        body_iface: *BodyInterface,
+        body_id: BodyId,
+        shape: *const Shape,
+        update_mass_properties: bool,
+        activation: Activation,
+    ) void {
+        c.JPC_BodyInterface_SetShape(
+            @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
+            body_id.toJpc(),
+            @ptrCast(shape),
+            update_mass_properties,
+            @intFromEnum(activation),
+        );
+    }
+
     pub fn addForce(body_iface: *BodyInterface, body_id: BodyId, force: [3]f32) void {
         return c.JPC_BodyInterface_AddForce(
             @as(*c.JPC_BodyInterface, @ptrCast(body_iface)),
