@@ -83,13 +83,13 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(joltc);
 
-    joltc.addIncludePath(b.path("libs"));
-    joltc.addIncludePath(b.path("libs/JoltC"));
-    joltc.linkLibC();
+    joltc.root_module.addIncludePath(b.path("libs"));
+    joltc.root_module.addIncludePath(b.path("libs/JoltC"));
+    joltc.root_module.link_libc = true;
     if (target.result.abi != .msvc) {
-        joltc.linkLibCpp();
+        joltc.root_module.link_libcpp = true;
     } else {
-        joltc.linkSystemLibrary("advapi32");
+        joltc.root_module.linkSystemLibrary("advapi32", .{});
     }
 
     const src_dir = "libs/Jolt";
@@ -101,7 +101,7 @@ pub fn build(b: *std.Build) void {
     };
 
     addMacros(joltc.root_module, options);
-    joltc.addCSourceFiles(.{
+    joltc.root_module.addCSourceFiles(.{
         .files = &.{
             "libs/JoltC/JoltPhysicsC.cpp",
             "libs/JoltC/JoltPhysicsC_Extensions.cpp",
@@ -243,7 +243,7 @@ pub fn build(b: *std.Build) void {
     });
 
     for (user_extensions) |user_extension| {
-        joltc.addCSourceFile(.{
+        joltc.root_module.addCSourceFile(.{
             .file = user_extension,
             .flags = c_flags,
         });
@@ -263,11 +263,11 @@ pub fn build(b: *std.Build) void {
 
     // TODO: Problems with LTO on Windows.
     if (target.result.os.tag == .windows) {
-        tests.want_lto = false;
+        tests.lto = .none;
     }
 
     addMacros(tests.root_module, options);
-    tests.addCSourceFile(.{
+    tests.root_module.addCSourceFile(.{
         .file = b.path("libs/JoltC/JoltPhysicsC_Tests.c"),
         .flags = &.{
             "-fno-sanitize=undefined",
@@ -278,8 +278,8 @@ pub fn build(b: *std.Build) void {
         tests.root_module.addCMacro("PRINT_OUTPUT", "");
 
     tests.root_module.addImport("zphysics_options", options_module);
-    tests.addIncludePath(b.path("libs/JoltC"));
-    tests.linkLibrary(joltc);
+    tests.root_module.addIncludePath(b.path("libs/JoltC"));
+    tests.root_module.linkLibrary(joltc);
 
     test_step.dependOn(&b.addRunArtifact(tests).step);
 }

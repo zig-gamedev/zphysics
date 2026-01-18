@@ -42,13 +42,13 @@ typedef float JPC_Real;
     #define JPC_DEBUG_RENDERER 0
 #endif
 
-#define _JPC_REFTARGET_HEADER struct { const void * __vfptr_header[1]; uint32_t ref_count; };
+#define _JPC_REFTARGET_HEADER struct { const void * __vfptr_header[1]; uint32_t ref_count; }
 
 #if defined(_MSC_VER)
 #define _JPC_VTABLE_HEADER const void* __vtable_header[1]
 // MSVC quirk: If the first member of a derived class has alignment > 8, then extra padding is inserted such that
 //             the first member of the base class has the same alignment.
-#define _JPC_REFTARGET_HEADER_ALIGN_16 struct { const void * __vtable_ptr[2]; uint32_t ref_count; };
+#define _JPC_REFTARGET_HEADER_ALIGN_16 struct { const void * __vtable_ptr[2]; uint32_t ref_count; }
 #else
 #define _JPC_VTABLE_HEADER const void* __vtable_header[2]
 #define _JPC_REFTARGET_HEADER_ALIGN_16 _JPC_REFTARGET_HEADER
@@ -2028,6 +2028,9 @@ JPC_API void
 JPC_BodyInterface_DestroyBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_id);
 
 JPC_API void
+JPC_BodyInterface_DestroyBodies(JPC_BodyInterface *in_iface, const JPC_BodyID* in_body_ids, int in_num_bodies);
+
+JPC_API void
 JPC_BodyInterface_AddBodiesAbort(JPC_BodyInterface *in_iface,
                                  JPC_BodyID* in_body_ids,
                                  int in_num_bodies,
@@ -2048,6 +2051,9 @@ JPC_BodyInterface_AddBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_id, JP
 
 JPC_API void
 JPC_BodyInterface_RemoveBody(JPC_BodyInterface *in_iface, JPC_BodyID in_body_id);
+
+JPC_API void
+JPC_BodyInterface_RemoveBodies(JPC_BodyInterface *in_iface, JPC_BodyID* in_body_ids, int in_num_bodies);
 
 JPC_API JPC_BodyID
 JPC_BodyInterface_CreateAndAddBody(JPC_BodyInterface *in_iface,
@@ -2132,6 +2138,13 @@ JPC_BodyInterface_DeactivateBodies(JPC_BodyInterface *in_iface, const JPC_BodyID
 
 JPC_API bool
 JPC_BodyInterface_IsActive(const JPC_BodyInterface *in_iface, JPC_BodyID in_body_id);
+
+JPC_API void
+JPC_BodyInterface_SetShape(const JPC_BodyInterface *in_iface,
+                           JPC_BodyID in_body_id,
+                           const JPC_Shape* in_shape,
+                           bool in_update_mass_properties,
+                           JPC_Activation in_activation_mode);
 
 JPC_API void
 JPC_BodyInterface_SetPositionRotationAndVelocity(JPC_BodyInterface *in_iface,
