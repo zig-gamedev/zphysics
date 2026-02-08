@@ -1248,9 +1248,10 @@ const SizeAndAlignment = packed struct(u64) {
 };
 const mem_alignment = 16;
 pub const GlobalState = struct {
+    io: std.Io,
     mem_allocator: std.mem.Allocator,
     mem_allocations: std.AutoHashMap(usize, SizeAndAlignment),
-    mem_mutex: std.Thread.Mutex = .{},
+    mem_mutex: std.Io.Mutex = .init,
 
     temp_allocator: *TempAllocator,
     job_system: *JobSystem,
@@ -1265,7 +1266,7 @@ pub const AssertFailedFunc = *const fn (
     line: u32,
 ) callconv(.c) bool;
 
-pub fn init(allocator: std.mem.Allocator, args: struct {
+pub fn init(allocator: std.mem.Allocator, io: std.Io, args: struct {
     temp_allocator_size: u32 = 16 * 1024 * 1024,
     max_jobs: u32 = max_physics_jobs,
     max_barriers: u32 = max_physics_barriers,
@@ -1274,6 +1275,7 @@ pub fn init(allocator: std.mem.Allocator, args: struct {
     std.debug.assert(state == null);
 
     state = .{
+        .io = io,
         .mem_allocator = allocator,
         .mem_allocations = std.AutoHashMap(usize, SizeAndAlignment).init(allocator),
         .temp_allocator = undefined,
@@ -1297,10 +1299,11 @@ pub fn preReload() GlobalState {
     return tmp;
 }
 
-pub fn postReload(allocator: std.mem.Allocator, prev_state: GlobalState) void {
+pub fn postReload(allocator: std.mem.Allocator, io: std.Io, prev_state: GlobalState) void {
     std.debug.assert(state == null);
 
     state = prev_state;
+    state.?.io = io;
     state.?.mem_allocator = allocator;
     state.?.mem_allocations.allocator = allocator;
 
@@ -3766,8 +3769,8 @@ pub const Constraint = opaque {
 //
 //--------------------------------------------------------------------------------------------------
 fn zphysicsAlloc(size: usize) callconv(.c) ?*anyopaque {
-    state.?.mem_mutex.lock();
-    defer state.?.mem_mutex.unlock();
+    state.?.mem_mutex.lockUncancelable(state.?.io);
+    defer state.?.mem_mutex.unlock(state.?.io);
 
     const ptr = state.?.mem_allocator.rawAlloc(
         size,
@@ -3785,8 +3788,8 @@ fn zphysicsAlloc(size: usize) callconv(.c) ?*anyopaque {
 }
 
 fn zphysicsRealloc(maybe_ptr: ?*anyopaque, reported_old_size: usize, new_size: usize) callconv(.c) ?*anyopaque {
-    state.?.mem_mutex.lock();
-    defer state.?.mem_mutex.unlock();
+    state.?.mem_mutex.lockUncancelable(state.?.io);
+    defer state.?.mem_mutex.unlock(state.?.io);
 
     const old_size = if (maybe_ptr != null) reported_old_size else 0;
 
@@ -3811,8 +3814,8 @@ fn zphysicsRealloc(maybe_ptr: ?*anyopaque, reported_old_size: usize, new_size: u
 }
 
 fn zphysicsAlignedAlloc(size: usize, alignment: usize) callconv(.c) ?*anyopaque {
-    state.?.mem_mutex.lock();
-    defer state.?.mem_mutex.unlock();
+    state.?.mem_mutex.lockUncancelable(state.?.io);
+    defer state.?.mem_mutex.unlock(state.?.io);
 
     const ptr = state.?.mem_allocator.rawAlloc(
         size,
@@ -3831,8 +3834,8 @@ fn zphysicsAlignedAlloc(size: usize, alignment: usize) callconv(.c) ?*anyopaque 
 
 fn zphysicsFree(maybe_ptr: ?*anyopaque) callconv(.c) void {
     if (maybe_ptr) |ptr| {
-        state.?.mem_mutex.lock();
-        defer state.?.mem_mutex.unlock();
+        state.?.mem_mutex.lockUncancelable(state.?.io);
+        defer state.?.mem_mutex.unlock(state.?.io);
 
         const info = state.?.mem_allocations.fetchRemove(@intFromPtr(ptr)).?.value;
 
@@ -3853,7 +3856,7 @@ fn zphysicsFree(maybe_ptr: ?*anyopaque) callconv(.c) void {
 const expect = std.testing.expect;
 
 test {
-    std.testing.refAllDeclsRecursive(@This());
+    std.testing.refAllDecls(@This());
 }
 
 extern fn JoltCTest_Basic1() u32;
@@ -3881,7 +3884,7 @@ test "jolt_c.serialization" {
 }
 
 test "zphysics.BodyCreationSettings" {
-    try init(std.testing.allocator, .{});
+    try init(std.testing.allocator, std.testing.io, .{});
     defer deinit();
 
     const approxEql = std.math.approxEqAbs;
@@ -3939,7 +3942,7 @@ test "zphysics.BodyCreationSettings" {
 }
 
 test "zphysics.basic" {
-    try init(std.testing.allocator, .{});
+    try init(std.testing.allocator, std.testing.io, .{});
     defer deinit();
 
     const my_broad_phase_layer_interface = test_cb1.MyBroadphaseLayerInterface.init();
@@ -4052,7 +4055,7 @@ test "zphysics.basic" {
 }
 
 test "zphysics.shape.sphere" {
-    try init(std.testing.allocator, .{});
+    try init(std.testing.allocator, std.testing.io, .{});
     defer deinit();
 
     const my_broad_phase_layer_interface = test_cb1.MyBroadphaseLayerInterface.init();
@@ -4093,7 +4096,7 @@ test "zphysics.shape.sphere" {
 }
 
 test "zphysics.shape.capsule" {
-    try init(std.testing.allocator, .{});
+    try init(std.testing.allocator, std.testing.io, .{});
     defer deinit();
 
     const my_broad_phase_layer_interface = test_cb1.MyBroadphaseLayerInterface.init();
@@ -4132,7 +4135,7 @@ test "zphysics.shape.capsule" {
 }
 
 test "zphysics.shape.taperedcapsule" {
-    try init(std.testing.allocator, .{});
+    try init(std.testing.allocator, std.testing.io, .{});
     defer deinit();
 
     const my_broad_phase_layer_interface = test_cb1.MyBroadphaseLayerInterface.init();
@@ -4172,7 +4175,7 @@ test "zphysics.shape.taperedcapsule" {
 }
 
 test "zphysics.shape.cylinder" {
-    try init(std.testing.allocator, .{});
+    try init(std.testing.allocator, std.testing.io, .{});
     defer deinit();
 
     const my_broad_phase_layer_interface = test_cb1.MyBroadphaseLayerInterface.init();
@@ -4214,7 +4217,7 @@ test "zphysics.shape.cylinder" {
 }
 
 test "zphysics.shape.convexhull" {
-    try init(std.testing.allocator, .{});
+    try init(std.testing.allocator, std.testing.io, .{});
     defer deinit();
 
     const my_broad_phase_layer_interface = test_cb1.MyBroadphaseLayerInterface.init();
@@ -4249,7 +4252,7 @@ test "zphysics.shape.convexhull" {
 }
 
 test "zphysics.shape.heightfield" {
-    try init(std.testing.allocator, .{});
+    try init(std.testing.allocator, std.testing.io, .{});
     defer deinit();
 
     const my_broad_phase_layer_interface = test_cb1.MyBroadphaseLayerInterface.init();
@@ -4296,7 +4299,7 @@ test "zphysics.shape.heightfield" {
 }
 
 test "zphysics.shape.meshshape" {
-    try init(std.testing.allocator, .{});
+    try init(std.testing.allocator, std.testing.io, .{});
     defer deinit();
 
     const my_broad_phase_layer_interface = test_cb1.MyBroadphaseLayerInterface.init();
@@ -4334,7 +4337,7 @@ test "zphysics.shape.meshshape" {
 }
 
 test "zphysics.body.basic" {
-    try init(std.testing.allocator, .{});
+    try init(std.testing.allocator, std.testing.io, .{});
     defer deinit();
 
     const my_broad_phase_layer_interface = test_cb1.MyBroadphaseLayerInterface.init();
@@ -4516,7 +4519,7 @@ test "zphysics.body.basic" {
 }
 
 test "zphysics.body.motion" {
-    try init(std.testing.allocator, .{});
+    try init(std.testing.allocator, std.testing.io, .{});
     defer deinit();
 
     const my_broad_phase_layer_interface = test_cb1.MyBroadphaseLayerInterface.init();
@@ -4606,7 +4609,7 @@ test "zphysics.body.motion" {
 test "zphysics.debugrenderer" {
     if (!debug_renderer_enabled) return;
 
-    try init(std.testing.allocator, .{});
+    try init(std.testing.allocator, std.testing.io, .{});
     defer deinit();
 
     var my_debug_renderer = test_cb1.MyDebugRenderer{};
@@ -4658,7 +4661,7 @@ test "zphysics.debugrenderer" {
 }
 
 test "zphysics.serialization" {
-    try init(std.testing.allocator, .{});
+    try init(std.testing.allocator, std.testing.io, .{});
     defer deinit();
 
     const half_extents: [3]f32 = .{ 1.0, 2.0, 3.0 };
