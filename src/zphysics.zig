@@ -792,7 +792,8 @@ pub const AllowedDOFs = enum(c.JPC_AllowedDOFs) {
     translation_z = c.JPC_ALLOWED_DOFS_TRANSLATION_Z, // 0b000100
     rotation_x = c.JPC_ALLOWED_DOFS_ROTATION_X, // 0b001000
     rotation_y = c.JPC_ALLOWED_DOFS_ROTATION_Y, // 0b010000
-    rotation_z = c.JPC_ALLOWED_DOFS_ROTATION_Z, // 0b100000
+    rotation_z = c.JPC_ALLOWED_DOFS_ROTATION_Z, // 0b100000,
+    _, // Non-exhaustive: supports bitwise combinations of the above flags
 };
 
 pub const OverrideMassProperties = enum(c.JPC_OverrideMassProperties) {
