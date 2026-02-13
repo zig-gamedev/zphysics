@@ -1454,6 +1454,15 @@ pub const PhysicsSystem = opaque {
         c.JPC_PhysicsSystem_RemoveStepListener(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)), listener);
     }
 
+    /// Add a VehicleConstraint as a step listener (handles multiple inheritance correctly)
+    pub fn addVehicleStepListener(physics_system: *PhysicsSystem, vehicle: *VehicleConstraint) void {
+        c.JPC_PhysicsSystem_AddVehicleStepListener(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)), @ptrCast(vehicle));
+    }
+    /// Remove a VehicleConstraint step listener
+    pub fn removeVehicleStepListener(physics_system: *PhysicsSystem, vehicle: *VehicleConstraint) void {
+        c.JPC_PhysicsSystem_RemoveVehicleStepListener(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)), @ptrCast(vehicle));
+    }
+
     pub fn addConstraint(physics_system: *PhysicsSystem, constraint: ?*Constraint) void {
         c.JPC_PhysicsSystem_AddConstraint(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)), @ptrCast(constraint));
     }
@@ -3759,6 +3768,388 @@ pub const Constraint = opaque {
 
     pub fn setUserData(constraint: *Constraint, user_data: u64) void {
         return c.JPC_Constraint_SetUserData(@ptrCast(constraint), user_data);
+    }
+};
+//--------------------------------------------------------------------------------------------------
+//
+// WheelSettings
+//
+//--------------------------------------------------------------------------------------------------
+pub const WheelSettings = opaque {
+    pub fn create() !*WheelSettings {
+        return @ptrCast(c.JPC_WheelSettings_Create() orelse return error.FailedToCreateWheelSettings);
+    }
+
+    pub fn release(self: *WheelSettings) void {
+        c.JPC_WheelSettings_Release(@ptrCast(self));
+    }
+
+    pub fn setPosition(self: *WheelSettings, position: [3]f32) void {
+        c.JPC_WheelSettings_SetPosition(@ptrCast(self), &position);
+    }
+
+    pub fn setSuspensionDirection(self: *WheelSettings, direction: [3]f32) void {
+        c.JPC_WheelSettings_SetSuspensionDirection(@ptrCast(self), &direction);
+    }
+
+    pub fn setSteeringAxis(self: *WheelSettings, axis: [3]f32) void {
+        c.JPC_WheelSettings_SetSteeringAxis(@ptrCast(self), &axis);
+    }
+
+    pub fn setWheelUp(self: *WheelSettings, up: [3]f32) void {
+        c.JPC_WheelSettings_SetWheelUp(@ptrCast(self), &up);
+    }
+
+    pub fn setWheelForward(self: *WheelSettings, forward: [3]f32) void {
+        c.JPC_WheelSettings_SetWheelForward(@ptrCast(self), &forward);
+    }
+
+    pub fn setSuspensionMinLength(self: *WheelSettings, length: f32) void {
+        c.JPC_WheelSettings_SetSuspensionMinLength(@ptrCast(self), length);
+    }
+
+    pub fn setSuspensionMaxLength(self: *WheelSettings, length: f32) void {
+        c.JPC_WheelSettings_SetSuspensionMaxLength(@ptrCast(self), length);
+    }
+
+    pub fn setSuspensionPreloadLength(self: *WheelSettings, length: f32) void {
+        c.JPC_WheelSettings_SetSuspensionPreloadLength(@ptrCast(self), length);
+    }
+
+    pub fn setSuspensionSpring(self: *WheelSettings, frequency: f32, damping: f32) void {
+        c.JPC_WheelSettings_SetSuspensionSpring(@ptrCast(self), frequency, damping);
+    }
+
+    pub fn setRadius(self: *WheelSettings, radius: f32) void {
+        c.JPC_WheelSettings_SetRadius(@ptrCast(self), radius);
+    }
+
+    pub fn setWidth(self: *WheelSettings, width: f32) void {
+        c.JPC_WheelSettings_SetWidth(@ptrCast(self), width);
+    }
+};
+//--------------------------------------------------------------------------------------------------
+//
+// WheelSettingsWV (-> WheelSettings)
+//
+//--------------------------------------------------------------------------------------------------
+pub const WheelSettingsWV = opaque {
+    pub fn create() !*WheelSettingsWV {
+        return @ptrCast(c.JPC_WheelSettingsWV_Create() orelse return error.FailedToCreateWheelSettingsWV);
+    }
+
+    pub fn release(self: *WheelSettingsWV) void {
+        c.JPC_WheelSettingsWV_Release(@ptrCast(self));
+    }
+
+    pub fn asWheelSettings(self: *WheelSettingsWV) *WheelSettings {
+        return @ptrCast(c.JPC_WheelSettingsWV_AsWheelSettings(@ptrCast(self)));
+    }
+
+    pub fn setInertia(self: *WheelSettingsWV, inertia: f32) void {
+        c.JPC_WheelSettingsWV_SetInertia(@ptrCast(self), inertia);
+    }
+
+    pub fn setAngularDamping(self: *WheelSettingsWV, damping: f32) void {
+        c.JPC_WheelSettingsWV_SetAngularDamping(@ptrCast(self), damping);
+    }
+
+    pub fn setMaxSteerAngle(self: *WheelSettingsWV, angle: f32) void {
+        c.JPC_WheelSettingsWV_SetMaxSteerAngle(@ptrCast(self), angle);
+    }
+
+    pub fn setMaxBrakeTorque(self: *WheelSettingsWV, torque: f32) void {
+        c.JPC_WheelSettingsWV_SetMaxBrakeTorque(@ptrCast(self), torque);
+    }
+
+    pub fn setMaxHandBrakeTorque(self: *WheelSettingsWV, torque: f32) void {
+        c.JPC_WheelSettingsWV_SetMaxHandBrakeTorque(@ptrCast(self), torque);
+    }
+};
+//--------------------------------------------------------------------------------------------------
+//
+// Wheel
+//
+//--------------------------------------------------------------------------------------------------
+pub const Wheel = opaque {
+    pub fn hasContact(self: *const Wheel) bool {
+        return c.JPC_Wheel_HasContact(@ptrCast(self));
+    }
+
+    pub fn getContactBodyID(self: *const Wheel) BodyId {
+        return c.JPC_Wheel_GetContactBodyID(@ptrCast(self));
+    }
+
+    pub fn getContactPosition(self: *const Wheel) [3]f32 {
+        var position: [3]f32 = undefined;
+        c.JPC_Wheel_GetContactPosition(@ptrCast(self), &position);
+        return position;
+    }
+
+    pub fn getContactNormal(self: *const Wheel) [3]f32 {
+        var normal: [3]f32 = undefined;
+        c.JPC_Wheel_GetContactNormal(@ptrCast(self), &normal);
+        return normal;
+    }
+
+    pub fn getSuspensionLength(self: *const Wheel) f32 {
+        return c.JPC_Wheel_GetSuspensionLength(@ptrCast(self));
+    }
+
+    pub fn getAngularVelocity(self: *const Wheel) f32 {
+        return c.JPC_Wheel_GetAngularVelocity(@ptrCast(self));
+    }
+
+    pub fn setAngularVelocity(self: *Wheel, velocity: f32) void {
+        c.JPC_Wheel_SetAngularVelocity(@ptrCast(self), velocity);
+    }
+
+    pub fn getRotationAngle(self: *const Wheel) f32 {
+        return c.JPC_Wheel_GetRotationAngle(@ptrCast(self));
+    }
+
+    pub fn setRotationAngle(self: *Wheel, angle: f32) void {
+        c.JPC_Wheel_SetRotationAngle(@ptrCast(self), angle);
+    }
+
+    pub fn getSteerAngle(self: *const Wheel) f32 {
+        return c.JPC_Wheel_GetSteerAngle(@ptrCast(self));
+    }
+
+    pub fn setSteerAngle(self: *Wheel, angle: f32) void {
+        c.JPC_Wheel_SetSteerAngle(@ptrCast(self), angle);
+    }
+};
+//--------------------------------------------------------------------------------------------------
+//
+// VehicleControllerSettings
+//
+//--------------------------------------------------------------------------------------------------
+pub const VehicleControllerSettings = opaque {};
+//--------------------------------------------------------------------------------------------------
+//
+// WheeledVehicleControllerSettings (-> VehicleControllerSettings)
+//
+//--------------------------------------------------------------------------------------------------
+pub const VehicleDifferentialSettings = extern struct {
+    left_wheel: i32 = -1,
+    right_wheel: i32 = -1,
+    differential_ratio: f32 = 3.42,
+    left_right_split: f32 = 0.5,
+    limited_slip_ratio: f32 = 1.4,
+    engine_torque_ratio: f32 = 1.0,
+};
+
+pub const TransmissionMode = enum(c_uint) {
+    auto = 0,
+    manual = 1,
+};
+
+pub const WheeledVehicleControllerSettings = opaque {
+    pub fn create() !*WheeledVehicleControllerSettings {
+        return @ptrCast(c.JPC_WheeledVehicleControllerSettings_Create() orelse return error.FailedToCreateWheeledVehicleControllerSettings);
+    }
+
+    pub fn release(self: *WheeledVehicleControllerSettings) void {
+        c.JPC_WheeledVehicleControllerSettings_Release(@ptrCast(self));
+    }
+
+    pub fn asVehicleControllerSettings(self: *WheeledVehicleControllerSettings) *VehicleControllerSettings {
+        return @ptrCast(c.JPC_WheeledVehicleControllerSettings_AsVehicleControllerSettings(@ptrCast(self)));
+    }
+
+    pub fn addDifferential(self: *WheeledVehicleControllerSettings, differential: VehicleDifferentialSettings) void {
+        c.JPC_WheeledVehicleControllerSettings_AddDifferential(@ptrCast(self), @ptrCast(&differential));
+    }
+
+    pub fn setEngineMaxTorque(self: *WheeledVehicleControllerSettings, torque: f32) void {
+        c.JPC_WheeledVehicleControllerSettings_SetEngineMaxTorque(@ptrCast(self), torque);
+    }
+
+    pub fn setEngineMinRPM(self: *WheeledVehicleControllerSettings, rpm: f32) void {
+        c.JPC_WheeledVehicleControllerSettings_SetEngineMinRPM(@ptrCast(self), rpm);
+    }
+
+    pub fn setEngineMaxRPM(self: *WheeledVehicleControllerSettings, rpm: f32) void {
+        c.JPC_WheeledVehicleControllerSettings_SetEngineMaxRPM(@ptrCast(self), rpm);
+    }
+
+    pub fn setTransmissionMode(self: *WheeledVehicleControllerSettings, mode: TransmissionMode) void {
+        c.JPC_WheeledVehicleControllerSettings_SetTransmissionMode(@ptrCast(self), @intFromEnum(mode));
+    }
+
+    pub fn setTransmissionGearRatios(self: *WheeledVehicleControllerSettings, ratios: []const f32) void {
+        c.JPC_WheeledVehicleControllerSettings_SetTransmissionGearRatios(@ptrCast(self), ratios.ptr, @intCast(ratios.len));
+    }
+
+    pub fn setTransmissionReverseGearRatios(self: *WheeledVehicleControllerSettings, ratios: []const f32) void {
+        c.JPC_WheeledVehicleControllerSettings_SetTransmissionReverseGearRatios(@ptrCast(self), ratios.ptr, @intCast(ratios.len));
+    }
+
+    pub fn setTransmissionSwitchTime(self: *WheeledVehicleControllerSettings, time: f32) void {
+        c.JPC_WheeledVehicleControllerSettings_SetTransmissionSwitchTime(@ptrCast(self), time);
+    }
+
+    pub fn setTransmissionClutchStrength(self: *WheeledVehicleControllerSettings, strength: f32) void {
+        c.JPC_WheeledVehicleControllerSettings_SetTransmissionClutchStrength(@ptrCast(self), strength);
+    }
+
+    pub fn setTransmissionShiftUpRPM(self: *WheeledVehicleControllerSettings, rpm: f32) void {
+        c.JPC_WheeledVehicleControllerSettings_SetTransmissionShiftUpRPM(@ptrCast(self), rpm);
+    }
+
+    pub fn setTransmissionShiftDownRPM(self: *WheeledVehicleControllerSettings, rpm: f32) void {
+        c.JPC_WheeledVehicleControllerSettings_SetTransmissionShiftDownRPM(@ptrCast(self), rpm);
+    }
+};
+//--------------------------------------------------------------------------------------------------
+//
+// WheeledVehicleController
+//
+//--------------------------------------------------------------------------------------------------
+pub const WheeledVehicleController = opaque {
+    pub fn setDriverInput(self: *WheeledVehicleController, forward: f32, right: f32, brake: f32, hand_brake: f32) void {
+        c.JPC_WheeledVehicleController_SetDriverInput(@ptrCast(self), forward, right, brake, hand_brake);
+    }
+
+    pub fn getEngineRotationSpeed(self: *const WheeledVehicleController) f32 {
+        return c.JPC_WheeledVehicleController_GetEngineRotationSpeed(@ptrCast(self));
+    }
+
+    pub fn getTransmissionCurrentGear(self: *const WheeledVehicleController) i32 {
+        return c.JPC_WheeledVehicleController_GetTransmissionCurrentGear(@ptrCast(self));
+    }
+
+    pub fn getTransmissionClutchFriction(self: *const WheeledVehicleController) f32 {
+        return c.JPC_WheeledVehicleController_GetTransmissionClutchFriction(@ptrCast(self));
+    }
+};
+//--------------------------------------------------------------------------------------------------
+//
+// VehicleCollisionTester
+//
+//--------------------------------------------------------------------------------------------------
+pub const VehicleCollisionTester = opaque {
+    pub fn addRef(self: *VehicleCollisionTester) void {
+        c.JPC_VehicleCollisionTester_AddRef(@ptrCast(self));
+    }
+
+    pub fn release(self: *VehicleCollisionTester) void {
+        c.JPC_VehicleCollisionTester_Release(@ptrCast(self));
+    }
+};
+
+pub const VehicleCollisionTesterRay = opaque {
+    pub fn create(object_layer: ObjectLayer, up: [3]f32, max_slope_angle: f32) !*VehicleCollisionTester {
+        return @ptrCast(c.JPC_VehicleCollisionTesterRay_Create(object_layer, &up, max_slope_angle) orelse return error.FailedToCreateVehicleCollisionTester);
+    }
+};
+
+pub const VehicleCollisionTesterCastSphere = opaque {
+    pub fn create(object_layer: ObjectLayer, radius: f32, up: [3]f32, max_slope_angle: f32) !*VehicleCollisionTester {
+        return @ptrCast(c.JPC_VehicleCollisionTesterCastSphere_Create(object_layer, radius, &up, max_slope_angle) orelse return error.FailedToCreateVehicleCollisionTester);
+    }
+};
+
+pub const VehicleCollisionTesterCastCylinder = opaque {
+    pub fn create(object_layer: ObjectLayer, convex_radius_fraction: f32) !*VehicleCollisionTester {
+        return @ptrCast(c.JPC_VehicleCollisionTesterCastCylinder_Create(object_layer, convex_radius_fraction) orelse return error.FailedToCreateVehicleCollisionTester);
+    }
+};
+//--------------------------------------------------------------------------------------------------
+//
+// VehicleAntiRollBarSettings
+//
+//--------------------------------------------------------------------------------------------------
+pub const VehicleAntiRollBarSettings = extern struct {
+    left_wheel: i32,
+    right_wheel: i32,
+    stiffness: f32 = 1000.0,
+};
+//--------------------------------------------------------------------------------------------------
+//
+// VehicleConstraintSettings (-> ConstraintSettings)
+//
+//--------------------------------------------------------------------------------------------------
+pub const VehicleConstraintSettings = opaque {
+    pub fn create() !*VehicleConstraintSettings {
+        return @ptrCast(c.JPC_VehicleConstraintSettings_Create() orelse return error.FailedToCreateVehicleConstraintSettings);
+    }
+
+    pub fn release(self: *VehicleConstraintSettings) void {
+        c.JPC_VehicleConstraintSettings_Release(@ptrCast(self));
+    }
+
+    pub fn asConstraintSettings(self: *VehicleConstraintSettings) *ConstraintSettings {
+        return @ptrCast(c.JPC_VehicleConstraintSettings_AsConstraintSettings(@ptrCast(self)));
+    }
+
+    pub fn setUp(self: *VehicleConstraintSettings, up: [3]f32) void {
+        c.JPC_VehicleConstraintSettings_SetUp(@ptrCast(self), &up);
+    }
+
+    pub fn setForward(self: *VehicleConstraintSettings, forward: [3]f32) void {
+        c.JPC_VehicleConstraintSettings_SetForward(@ptrCast(self), &forward);
+    }
+
+    pub fn setMaxPitchRollAngle(self: *VehicleConstraintSettings, angle: f32) void {
+        c.JPC_VehicleConstraintSettings_SetMaxPitchRollAngle(@ptrCast(self), angle);
+    }
+
+    pub fn addWheel(self: *VehicleConstraintSettings, wheel: *WheelSettings) void {
+        c.JPC_VehicleConstraintSettings_AddWheel(@ptrCast(self), @ptrCast(wheel));
+    }
+
+    pub fn addAntiRollBar(self: *VehicleConstraintSettings, anti_roll_bar: VehicleAntiRollBarSettings) void {
+        c.JPC_VehicleConstraintSettings_AddAntiRollBar(@ptrCast(self), @ptrCast(&anti_roll_bar));
+    }
+
+    pub fn setController(self: *VehicleConstraintSettings, controller: *VehicleControllerSettings) void {
+        c.JPC_VehicleConstraintSettings_SetController(@ptrCast(self), @ptrCast(controller));
+    }
+};
+//--------------------------------------------------------------------------------------------------
+//
+// VehicleConstraint (-> Constraint)
+//
+//--------------------------------------------------------------------------------------------------
+pub const VehicleConstraint = opaque {
+    pub fn create(body: *Body, settings: *const VehicleConstraintSettings) !*VehicleConstraint {
+        return @ptrCast(c.JPC_VehicleConstraint_Create(@ptrCast(body), @ptrCast(settings)) orelse return error.FailedToCreateVehicleConstraint);
+    }
+
+    pub fn asConstraint(self: *VehicleConstraint) *Constraint {
+        return @ptrCast(c.JPC_VehicleConstraint_AsConstraint(@ptrCast(self)));
+    }
+
+    pub fn setVehicleCollisionTester(self: *VehicleConstraint, tester: *VehicleCollisionTester) void {
+        c.JPC_VehicleConstraint_SetVehicleCollisionTester(@ptrCast(self), @ptrCast(tester));
+    }
+
+    pub fn getNumWheels(self: *const VehicleConstraint) u32 {
+        return c.JPC_VehicleConstraint_GetNumWheels(@ptrCast(self));
+    }
+
+    pub fn getWheel(self: *VehicleConstraint, index: u32) *Wheel {
+        return @ptrCast(c.JPC_VehicleConstraint_GetWheel(@ptrCast(self), index));
+    }
+
+    pub fn getController(self: *VehicleConstraint) *WheeledVehicleController {
+        return @ptrCast(c.JPC_VehicleConstraint_GetController(@ptrCast(self)));
+    }
+
+    pub fn getWheelLocalTransform(self: *const VehicleConstraint, wheel_index: u32, wheel_right: [3]f32, wheel_up: [3]f32) struct { position: [3]f32, rotation: [4]f32 } {
+        var position: [3]f32 = undefined;
+        var rotation: [4]f32 = undefined;
+        c.JPC_VehicleConstraint_GetWheelLocalTransform(@ptrCast(self), wheel_index, &wheel_right, &wheel_up, &position, &rotation);
+        return .{ .position = position, .rotation = rotation };
+    }
+
+    pub fn getWheelWorldTransform(self: *const VehicleConstraint, wheel_index: u32, wheel_right: [3]f32, wheel_up: [3]f32) struct { position: [3]f32, rotation: [4]f32 } {
+        var position: [3]f32 = undefined;
+        var rotation: [4]f32 = undefined;
+        c.JPC_VehicleConstraint_GetWheelWorldTransform(@ptrCast(self), wheel_index, &wheel_right, &wheel_up, &position, &rotation);
+        return .{ .position = position, .rotation = rotation };
     }
 };
 //--------------------------------------------------------------------------------------------------
