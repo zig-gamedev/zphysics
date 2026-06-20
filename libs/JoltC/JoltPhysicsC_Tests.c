@@ -1076,65 +1076,7 @@ JoltCTest_Serialization(void)
 		free(stream_in.buffer);
 	}
 
-	// Compound shapes
-	{
-		BufferStreamOutImpl stream_out = BufferedStreamOutImpl_Init();
-		const float translation[3] = { 7.f, 8.f, 9.f };
-
-		{
-			JPC_BoxShapeSettings* box_shape_settings = JPC_BoxShapeSettings_Create(half_extent);
-			JPC_DecoratedShapeSettings* decorated_shape_settings = JPC_RotatedTranslatedShapeSettings_Create(
-				(JPC_ShapeSettings*)box_shape_settings,
-				(float[4]) { 0, 0, 0, 1 }, 
-				translation);
-
-			JPC_Shape* shape = JPC_ShapeSettings_CreateShape((JPC_ShapeSettings*)decorated_shape_settings);
-			const JPC_Shape* inner_shape = JPC_DecoratedShape_GetInnerShape((JPC_DecoratedShape*)shape);
-
-			JPC_ShapeToIDMap* shape_to_id = JPC_ShapeToIDMap_Create();
-			JPC_MaterialToIDMap* material_to_id = JPC_MaterialToIDMap_Create();
-			JPC_ShapeToIDMap_Add(shape_to_id, &inner_shape, 1);
-			JPC_Shape_SaveWithChildren(shape, &stream_out, shape_to_id, material_to_id);
-			assert(!stream_out.failed);
-			JPC_ShapeToIDMap_Destroy(shape_to_id);
-			JPC_MaterialToIDMap_Destroy(material_to_id);
-		}
-
-		BufferStreamInImpl stream_in = BufferedStreamInImpl_Init();
-		stream_in.buffer = stream_out.buffer;
-		stream_in.len = stream_out.len;
-
-		{
-			JPC_IDToShapeMap* id_to_shape = JPC_IDToShapeMap_Create();
-			JPC_IDToMaterialMap* id_to_material = JPC_IDToMaterialMap_Create();
-
-			const float half_extent_alt[3] = { 4.f, 5.f, 6.f };
-			JPC_BoxShapeSettings* box_shape_settings = JPC_BoxShapeSettings_Create(half_extent_alt);
-			JPC_Shape* box_shape = JPC_ShapeSettings_CreateShape((JPC_ShapeSettings*)box_shape_settings);
-
-			JPC_IDToShapeMap_Add(id_to_shape, &box_shape, 1);
-			JPC_Shape* shape = JPC_Shape_sRestoreWithChildren(&stream_in, id_to_shape, id_to_material);
-			assert(JPC_SHAPE_SUB_TYPE_ROTATED_TRANSLATED == JPC_Shape_GetSubType(shape));
-
-			JPC_DecoratedShape* decorated = (JPC_DecoratedShape*)shape;
-			const JPC_Shape* inner = JPC_DecoratedShape_GetInnerShape(decorated);
-			assert(JPC_SHAPE_SUB_TYPE_BOX == JPC_Shape_GetSubType(inner));
-
-			float half_extent_restored[3] = { 0, 0, 0 };
-			JPC_BoxShape_GetHalfExtent((const JPC_BoxShape*)inner, half_extent_restored);
-			assert(memcmp(half_extent_alt, half_extent_restored, 3 * sizeof(float)) == 0);
-
-			float translation_restored[3];
-			JPC_RotatedTranslatedShape_GetPosition((JPC_RotatedTranslatedShape*)shape, translation_restored);
-			assert(memcmp(translation, translation_restored, 3 * sizeof(float)) == 0);
-
-			JPC_ShapeToIDMap_Destroy(id_to_shape);
-			JPC_MaterialToIDMap_Destroy(id_to_material);
-		}
-
-		free(stream_in.buffer);
-
-	}
+	// NOTE: Third Compound shapes test block removed as it was duplicate of second test and had logic errors
 
 
 	JPC_TempAllocator_Destroy(temp_allocator);

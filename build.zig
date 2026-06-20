@@ -55,19 +55,40 @@ pub fn build(b: *std.Build) void {
     ) orelse &.{};
 
     const options_step = b.addOptions();
-    inline for (std.meta.fields(@TypeOf(options))) |field| {
-        options_step.addOption(field.type, field.name, @field(options, field.name));
+    // Zig 0.17+: @typeInfo struct uses field_names/field_types arrays instead of inline iteration
+    const opt_type_info = @typeInfo(@TypeOf(options)).@"struct";
+    inline for (opt_type_info.field_names, 0..) |field_name, i| {
+        const field_type = opt_type_info.field_types[i];
+        options_step.addOption(field_type, field_name, @field(options, field_name));
     }
 
     const options_module = options_step.createModule();
+
+    // ===========================
+    // Create jolt_c translate-c module (Zig 0.17+: @cImport removed)
+    // ===========================
+    const jolt_c_step = b.addTranslateC(.{
+        .root_source_file = b.path("jolt_c.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    jolt_c_step.link_libc = true;
+    jolt_c_step.addIncludePath(b.path("libs"));
+    jolt_c_step.addIncludePath(b.path("libs/JoltC"));
+
+    const jolt_c_module = jolt_c_step.createModule();
 
     const zjolt = b.addModule("root", .{
         .root_source_file = b.path("src/zphysics.zig"),
         .imports = &.{
             .{ .name = "zphysics_options", .module = options_module },
+            .{ .name = "jolt_c", .module = jolt_c_module },
         },
+        .link_libc = true,
     });
+    addMacros(zjolt, options);
     zjolt.addIncludePath(b.path("libs/JoltC"));
+    zjolt.addIncludePath(b.path("libs"));
 
     const joltc = b.addLibrary(.{
         .name = "joltc",
@@ -77,6 +98,85 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+
+    // Test pointer tool
+    const test_ptr = b.addExecutable(.{
+        .name = "test-ptr",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/test_ptr.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    test_ptr.root_module.addImport("jolt_c", jolt_c_module);
+    test_ptr.root_module.linkLibrary(joltc);
+
+    const test_ptr_run = b.addRunArtifact(test_ptr);
+    const test_ptr_step = b.step("test-ptr", "Test pointer ABI");
+    test_ptr_step.dependOn(&test_ptr_run.step);
+
+    // Test ABI tool
+    const test_abi = b.addExecutable(.{
+        .name = "test-abi",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/test_abi.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "zphysics_options", .module = options_module },
+                .{ .name = "jolt_c", .module = jolt_c_module },
+                .{ .name = "zphysics", .module = zjolt },
+            },
+        }),
+    });
+    test_abi.root_module.addIncludePath(b.path("libs/JoltC"));
+    test_abi.root_module.linkLibrary(joltc);
+
+    const test_abi_run = b.addRunArtifact(test_abi);
+    const test_abi_step = b.step("test-abi", "Test ABI compatibility");
+    test_abi_step.dependOn(&test_abi_run.step);
+
+    // Test optional pointer layout
+    const test_opt_ptr = b.addExecutable(.{
+        .name = "test-opt-ptr",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/test_opt_ptr.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "jolt_c", .module = jolt_c_module },
+            },
+        }),
+    });
+    test_opt_ptr.root_module.addIncludePath(b.path("libs/JoltC"));
+    test_opt_ptr.root_module.linkLibrary(joltc);
+
+    const test_opt_ptr_run = b.addRunArtifact(test_opt_ptr);
+    const test_opt_ptr_step = b.step("test-opt-ptr", "Test optional pointer layout");
+    test_opt_ptr_step.dependOn(&test_opt_ptr_run.step);
+
+    // Test align(8) fields
+    const test_align8 = b.addExecutable(.{
+        .name = "test-align8",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/test_align8.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "jolt_c", .module = jolt_c_module },
+            },
+        }),
+    });
+    test_align8.root_module.addIncludePath(b.path("libs/JoltC"));
+    test_align8.root_module.linkLibrary(joltc);
+
+    const test_align8_run = b.addRunArtifact(test_align8);
+    const test_align8_step = b.step("test-align8", "Test align(8) fields");
+    test_align8_step.dependOn(&test_align8_run.step);
 
     if (options.shared and target.result.os.tag == .windows)
         joltc.root_module.addCMacro("JPC_API", "extern __declspec(dllexport)");
@@ -276,10 +376,72 @@ pub fn build(b: *std.Build) void {
 
     if (b.option(bool, "verbose", "Print verbose test debug output to stderr") orelse false)
         tests.root_module.addCMacro("PRINT_OUTPUT", "");
-
     tests.root_module.addImport("zphysics_options", options_module);
+    tests.root_module.addImport("jolt_c", jolt_c_module);
     tests.root_module.addIncludePath(b.path("libs/JoltC"));
     tests.root_module.linkLibrary(joltc);
 
     test_step.dependOn(&b.addRunArtifact(tests).step);
+
+    // Size check tools
+    const size_check = b.addExecutable(.{
+        .name = "size-check",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/size_check.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zphysics_options", .module = options_module },
+                .{ .name = "jolt_c", .module = jolt_c_module },
+                .{ .name = "zphysics", .module = zjolt },
+            },
+        }),
+    });
+    size_check.root_module.addIncludePath(b.path("libs/JoltC"));
+    size_check.root_module.linkLibrary(joltc);
+    addMacros(size_check.root_module, options);
+
+    // Unified size check tool - compares all C and Zig structs
+    const check_all = b.addExecutable(.{
+        .name = "check-all-sizes",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/check_all_sizes.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zphysics_options", .module = options_module },
+                .{ .name = "jolt_c", .module = jolt_c_module },
+                .{ .name = "zphysics", .module = zjolt },
+            },
+        }),
+    });
+    check_all.root_module.addIncludePath(b.path("libs/JoltC"));
+    check_all.root_module.linkLibrary(joltc);
+    addMacros(check_all.root_module, options);
+
+    const run_check_all = b.addRunArtifact(check_all);
+    const check_all_step = b.step("check-all-sizes", "Compare all C and Zig struct sizes");
+    check_all_step.dependOn(&run_check_all.step);
+
+    // Detailed size analysis tool
+    const analyze = b.addExecutable(.{
+        .name = "analyze-sizes",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/analyze_sizes.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zphysics_options", .module = options_module },
+                .{ .name = "jolt_c", .module = jolt_c_module },
+                .{ .name = "zphysics", .module = zjolt },
+            },
+        }),
+    });
+    analyze.root_module.addIncludePath(b.path("libs/JoltC"));
+    analyze.root_module.linkLibrary(joltc);
+    addMacros(analyze.root_module, options);
+
+    const run_analyze = b.addRunArtifact(analyze);
+    const analyze_step = b.step("analyze-sizes", "Print detailed C vs Zig struct size and offset analysis");
+    analyze_step.dependOn(&run_analyze.step);
 }

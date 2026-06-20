@@ -1888,7 +1888,7 @@ JPC_API void
 JPC_IDToShapeMap_Add(JPC_IDToShapeMap *in_map, JPC_Shape *const *in_shapes, uint32_t in_num_shapes);
 
 JPC_API void
-JPC_IDToShapeMap_Destroy(JPC_ShapeToIDMap *in_map);
+JPC_IDToShapeMap_Destroy(JPC_IDToShapeMap *in_map);
 
 JPC_API JPC_IDToMaterialMap*
 JPC_IDToMaterialMap_Create();

@@ -1,0 +1,111 @@
+Get-ChildItem : 无法处理参数，因为参数名称“o”具有二义性。可能的匹配项包括:  -OutVariable -OutBuffer。
+所在位置 行:1 字符: 39
++ Get-ChildItem 'tools' -Filter '*.zig' -o -r | ForEach-Object { Select ...
++                                       ~~
+    + CategoryInfo          : InvalidArgument: (:) [Get-ChildItem]，ParameterBindingException
+    + FullyQualifiedErrorId : AmbiguousParameter,Microsoft.PowerShell.Commands.GetChildItemCommand
+ 
+Select-String : 无法将参数绑定到参数“Path”，因为该参数是空值。
+所在位置 行:1 字符: 262
++ ...  { Select-String -Pattern '[\u4e00-\u9fff]' -Path $_.FullName -Simple ...
++                                                       ~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Select-String]，ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.SelectStringCo 
+   mmand
+ 
+Select-String : 无法将参数绑定到参数“Path”，因为该参数是空值。
+所在位置 行:1 字符: 262
++ ...  { Select-String -Pattern '[\u4e00-\u9fff]' -Path $_.FullName -Simple ...
++                                                       ~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Select-String]，ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.SelectStringCo 
+   mmand
+ 
+Select-String : 无法将参数绑定到参数“Path”，因为该参数是空值。
+所在位置 行:1 字符: 262
++ ...  { Select-String -Pattern '[\u4e00-\u9fff]' -Path $_.FullName -Simple ...
++                                                       ~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Select-String]，ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.SelectStringCo 
+   mmand
+ 
+Select-String : 无法将参数绑定到参数“Path”，因为该参数是空值。
+所在位置 行:1 字符: 262
++ ...  { Select-String -Pattern '[\u4e00-\u9fff]' -Path $_.FullName -Simple ...
++                                                       ~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Select-String]，ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.SelectStringCo 
+   mmand
+ 
+Select-String : 无法将参数绑定到参数“Path”，因为该参数是空值。
+所在位置 行:1 字符: 262
++ ...  { Select-String -Pattern '[\u4e00-\u9fff]' -Path $_.FullName -Simple ...
++                                                       ~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Select-String]，ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.SelectStringCo 
+   mmand
+ 
+Select-String : 无法将参数绑定到参数“Path”，因为该参数是空值。
+所在位置 行:1 字符: 262
++ ...  { Select-String -Pattern '[\u4e00-\u9fff]' -Path $_.FullName -Simple ...
++                                                       ~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Select-String]，ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.SelectStringCo 
+   mmand
+ 
+Select-String : 无法将参数绑定到参数“Path”，因为该参数是空值。
+所在位置 行:1 字符: 262
++ ...  { Select-String -Pattern '[\u4e00-\u9fff]' -Path $_.FullName -Simple ...
++                                                       ~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Select-String]，ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.SelectStringCo 
+   mmand
+ 
+Select-String : 无法将参数绑定到参数“Path”，因为该参数是空值。
+所在位置 行:1 字符: 262
++ ...  { Select-String -Pattern '[\u4e00-\u9fff]' -Path $_.FullName -Simple ...
++                                                       ~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Select-String]，ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.SelectStringCo 
+   mmand
+ 
+Select-String : 无法将参数绑定到参数“Path”，因为该参数是空值。
+所在位置 行:1 字符: 262
++ ...  { Select-String -Pattern '[\u4e00-\u9fff]' -Path $_.FullName -Simple ...
++                                                       ~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Select-String]，ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.SelectStringCo 
+   mmand
+ 
+Select-String : 无法将参数绑定到参数“Path”，因为该参数是空值。
+所在位置 行:1 字符: 262
++ ...  { Select-String -Pattern '[\u4e00-\u9fff]' -Path $_.FullName -Simple ...
++                                                       ~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Select-String]，ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.SelectStringCo 
+   mmand
+ 
+Select-String : 无法将参数绑定到参数“Path”，因为该参数是空值。
+所在位置 行:1 字符: 262
++ ...  { Select-String -Pattern '[\u4e00-\u9fff]' -Path $_.FullName -Simple ...
++                                                       ~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Select-String]，ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.SelectStringCo 
+   mmand
+ 
+Select-String : 无法将参数绑定到参数“Path”，因为该参数是空值。
+所在位置 行:1 字符: 262
++ ...  { Select-String -Pattern '[\u4e00-\u9fff]' -Path $_.FullName -Simple ...
++                                                       ~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Select-String]，ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.SelectStringCo 
+   mmand
+ 
+Select-String : 无法将参数绑定到参数“Path”，因为该参数是空值。
+所在位置 行:1 字符: 262
++ ...  { Select-String -Pattern '[\u4e00-\u9fff]' -Path $_.FullName -Simple ...
++                                                       ~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Select-String]，ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.SelectStringCo 
+   mmand
+ 
