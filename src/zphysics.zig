@@ -1247,11 +1247,30 @@ const SizeAndAlignment = packed struct(u64) {
     size: u48,
     alignment: u16,
 };
+
 const mem_alignment = 16;
+
+const SpinLockMutex = struct {
+    inner: std.atomic.Mutex = .unlocked,
+
+    fn lock(m: *SpinLockMutex) void {
+        while (!m.inner.tryLock()) {
+            std.atomic.spinLoopHint();
+        }
+    }
+
+    fn unlock(m: *SpinLockMutex) void {
+        m.inner.unlock();
+    }
+};
+
 pub const GlobalState = struct {
     mem_allocator: std.mem.Allocator,
     mem_allocations: std.AutoHashMap(usize, SizeAndAlignment),
-    mem_mutex: std.Thread.Mutex = .{},
+
+    /// This lock is taken into Jolt's callbacks for a brief hashmap insert/remove,
+    /// hence a tiny spinlock over std.atomic.Mutex should be sufficient.
+    mem_mutex: SpinLockMutex = .{},
 
     temp_allocator: *TempAllocator,
     job_system: *JobSystem,
@@ -3853,8 +3872,23 @@ fn zphysicsFree(maybe_ptr: ?*anyopaque) callconv(.c) void {
 //--------------------------------------------------------------------------------------------------
 const expect = std.testing.expect;
 
+/// Recursively references all public declarations so the semantic analyzer
+/// checks them, including those nested inside container types.
+fn refAllDeclsRecursive(comptime T: type) void {
+    if (!builtin.is_test) return;
+    inline for (comptime std.meta.declarations(T)) |decl| {
+        if (@TypeOf(@field(T, decl.name)) == type) {
+            switch (@typeInfo(@field(T, decl.name))) {
+                .@"struct", .@"enum", .@"union", .@"opaque" => refAllDeclsRecursive(@field(T, decl.name)),
+                else => {},
+            }
+        }
+        _ = &@field(T, decl.name);
+    }
+}
+
 test {
-    std.testing.refAllDeclsRecursive(@This());
+    refAllDeclsRecursive(@This());
 }
 
 extern fn JoltCTest_Basic1() u32;
