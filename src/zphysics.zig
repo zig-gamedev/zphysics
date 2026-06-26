@@ -1543,6 +1543,8 @@ pub const PhysicsSystem = opaque {
     }
 
     /// NOTE: Advanced. This function is *not* protected by a lock, use with care!
+    /// Returns a slice of size `getMaxBodies()`. 
+    /// Some pointers likely point to freed bodies so it is caller's responsibility to validate before use
     pub fn getBodiesUnsafe(physics_system: *const PhysicsSystem) []const *const Body {
         const ptr = c.JPC_PhysicsSystem_GetBodiesUnsafe(
             @as(*c.JPC_PhysicsSystem, @ptrFromInt(@intFromPtr(physics_system))),
@@ -1550,6 +1552,8 @@ pub const PhysicsSystem = opaque {
         return @as([*]const *const Body, @ptrCast(ptr))[0..physics_system.getMaxBodies()];
     }
     /// NOTE: Advanced. This function is *not* protected by a lock, use with care!
+    /// Returns a slice of size `getMaxBodies()`. 
+    /// Some pointers likely point to freed bodies so it is caller's responsibility to validate before use
     pub fn getBodiesMutUnsafe(physics_system: *PhysicsSystem) []const *Body {
         const ptr = c.JPC_PhysicsSystem_GetBodiesUnsafe(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)));
         return @as([*]const *Body, @ptrCast(ptr))[0..physics_system.getMaxBodies()];
