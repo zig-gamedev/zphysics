@@ -2116,7 +2116,7 @@ JPC_IDToShapeMap_Add(JPC_IDToShapeMap *in_map, JPC_Shape *const *in_shapes, uint
 }
 
 JPC_API void
-JPC_IDToShapeMap_Destroy(JPC_ShapeToIDMap *in_map)
+JPC_IDToShapeMap_Destroy(JPC_IDToShapeMap *in_map)
 {
 	JPH::Free(toJph(in_map));
 }
@@ -2139,7 +2139,7 @@ JPC_IDToMaterialMap_Add(JPC_IDToMaterialMap *in_map, JPC_PhysicsMaterial *const 
 }
 
 JPC_API void
-JPC_IDToMaterialMap_Destroy(JPC_ShapeToIDMap *in_map)
+JPC_IDToMaterialMap_Destroy(JPC_IDToMaterialMap *in_map)
 {
 	JPH::Free(toJph(in_map));
 }

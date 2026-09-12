@@ -1128,8 +1128,8 @@ JoltCTest_Serialization(void)
 			JPC_RotatedTranslatedShape_GetPosition((JPC_RotatedTranslatedShape*)shape, translation_restored);
 			assert(memcmp(translation, translation_restored, 3 * sizeof(float)) == 0);
 
-			JPC_ShapeToIDMap_Destroy(id_to_shape);
-			JPC_MaterialToIDMap_Destroy(id_to_material);
+            JPC_IDToShapeMap_Destroy(id_to_shape);
+            JPC_IDToMaterialMap_Destroy(id_to_material);
 		}
 
 		free(stream_in.buffer);

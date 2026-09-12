@@ -25,7 +25,7 @@ pub fn build(b: *std.Build) void {
             bool,
             "enable_asserts",
             "Enable assertions",
-        ) orelse (optimize == .Debug),
+        ) orelse (optimize == .debug),
         .enable_cross_platform_determinism = b.option(
             bool,
             "enable_cross_platform_determinism",
@@ -55,16 +55,33 @@ pub fn build(b: *std.Build) void {
     ) orelse &.{};
 
     const options_step = b.addOptions();
-    inline for (std.meta.fields(@TypeOf(options))) |field| {
-        options_step.addOption(field.type, field.name, @field(options, field.name));
+    inline for (
+        comptime std.meta.fieldTypes(@TypeOf(options)),
+        comptime std.meta.fieldNames(@TypeOf(options)),
+    ) |field_type, field_name| {
+        options_step.addOption(field_type, field_name, @field(options, field_name));
     }
 
     const options_module = options_step.createModule();
+
+    const translate_c = b.addTranslateC(.{
+        .root_source_file = b.path("src/c.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    if (options.use_double_precision) translate_c.defineCMacro("JPH_DOUBLE_PRECISION", "");
+    if (options.enable_asserts) translate_c.defineCMacro("JPH_ENABLE_ASSERTS", "");
+    if (options.enable_cross_platform_determinism) translate_c.defineCMacro("JPH_CROSS_PLATFORM_DETERMINISTIC", "");
+    if (options.enable_debug_renderer) translate_c.defineCMacro("JPH_DEBUG_RENDERER", "");
+
+    translate_c.addIncludePath(b.path("libs/JoltC"));
+    const c_module = translate_c.createModule();
 
     const zjolt = b.addModule("root", .{
         .root_source_file = b.path("src/zphysics.zig"),
         .imports = &.{
             .{ .name = "zphysics_options", .module = options_module },
+            .{ .name = "c", .module = c_module },
         },
     });
     zjolt.addIncludePath(b.path("libs/JoltC"));
@@ -257,6 +274,10 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/zphysics.zig"),
             .target = target,
             .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zphysics_options", .module = options_module },
+                .{ .name = "c", .module = c_module },
+            },
         }),
     });
     b.installArtifact(tests);
@@ -277,7 +298,6 @@ pub fn build(b: *std.Build) void {
     if (b.option(bool, "verbose", "Print verbose test debug output to stderr") orelse false)
         tests.root_module.addCMacro("PRINT_OUTPUT", "");
 
-    tests.root_module.addImport("zphysics_options", options_module);
     tests.root_module.addIncludePath(b.path("libs/JoltC"));
     tests.root_module.linkLibrary(joltc);
 
