@@ -1543,16 +1543,20 @@ pub const PhysicsSystem = opaque {
     }
 
     /// NOTE: Advanced. This function is *not* protected by a lock, use with care!
+    /// Returns a slice of size `getMaxBodies()`. 
+    /// Some pointers likely point to freed bodies so it is caller's responsibility to validate before use
     pub fn getBodiesUnsafe(physics_system: *const PhysicsSystem) []const *const Body {
         const ptr = c.JPC_PhysicsSystem_GetBodiesUnsafe(
             @as(*c.JPC_PhysicsSystem, @ptrFromInt(@intFromPtr(physics_system))),
         );
-        return @as([*]const *const Body, @ptrCast(ptr))[0..physics_system.getNumBodies()];
+        return @as([*]const *const Body, @ptrCast(ptr))[0..physics_system.getMaxBodies()];
     }
     /// NOTE: Advanced. This function is *not* protected by a lock, use with care!
+    /// Returns a slice of size `getMaxBodies()`. 
+    /// Some pointers likely point to freed bodies so it is caller's responsibility to validate before use
     pub fn getBodiesMutUnsafe(physics_system: *PhysicsSystem) []const *Body {
         const ptr = c.JPC_PhysicsSystem_GetBodiesUnsafe(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)));
-        return @as([*]const *Body, @ptrCast(ptr))[0..physics_system.getNumBodies()];
+        return @as([*]const *Body, @ptrCast(ptr))[0..physics_system.getMaxBodies()];
     }
 };
 //--------------------------------------------------------------------------------------------------
@@ -4516,8 +4520,62 @@ test "zphysics.body.basic" {
     try expect(physics_system.getNumActiveBodies() == 0);
 }
 
-test "zphysics.body.motion" {
+test "zphysics.body.getBodiesUnsafe_after_destroy" {
     try init(std.testing.allocator, .{});
+    defer deinit();
+
+    const my_broad_phase_layer_interface = test_cb1.MyBroadphaseLayerInterface.init();
+    const my_broad_phase_should_collide = test_cb1.MyObjectVsBroadPhaseLayerFilter{};
+    const my_object_should_collide = test_cb1.MyObjectLayerPairFilter{};
+
+    const physics_system = try PhysicsSystem.create(
+        @as(*const BroadPhaseLayerInterface, @ptrCast(&my_broad_phase_layer_interface)),
+        @as(*const ObjectVsBroadPhaseLayerFilter, @ptrCast(&my_broad_phase_should_collide)),
+        @as(*const ObjectLayerPairFilter, @ptrCast(&my_object_should_collide)),
+        .{ 
+            .max_bodies = 1024,
+            .num_body_mutexes = 0, 
+            .max_body_pairs = 1024, 
+            .max_contact_constraints = 1024 
+        },
+    );
+    defer physics_system.destroy();
+
+    const body_interface = physics_system.getBodyInterfaceMut();
+
+    const shape_settings = try BoxShapeSettings.create(.{ 1.0, 1.0, 1.0 });
+    defer shape_settings.asShapeSettings().release();
+    const shape = try shape_settings.asShapeSettings().createShape();
+    defer shape.release();
+
+    const settings = BodyCreationSettings{
+        .position = .{ 0, 0, 0, 1 },
+        .rotation = .{ 0, 0, 0, 1 },
+        .shape = shape,
+        .motion_type = .static,
+        .object_layer = test_cb1.object_layers.non_moving,
+    };
+
+    const b0 = try body_interface.createAndAddBody(settings, .activate);
+    const b1 = try body_interface.createAndAddBody(settings, .activate);
+    const b2 = try body_interface.createAndAddBody(settings, .activate);
+
+    _ = b0; // silence unused variable warning for testing
+
+    body_interface.removeBody(b1);
+    body_interface.destroyBody(b1);
+    
+    try expect(physics_system.getNumBodies() == 2);
+
+    const all_bodies = physics_system.getBodiesMutUnsafe();
+
+    //following should not throw panic
+    //zig does not have panic handler for unit tests so best we can do is test happy path or crash program
+    _ = tryGetBody(all_bodies, b2);
+}
+
+test "zphysics.body.motion" {
+    try init(std.testing.allocator, .{});   
     defer deinit();
 
     const my_broad_phase_layer_interface = test_cb1.MyBroadphaseLayerInterface.init();
