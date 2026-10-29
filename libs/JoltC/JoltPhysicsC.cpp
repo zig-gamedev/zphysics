@@ -38,6 +38,10 @@
 #include <Jolt/Physics/Body/BodyFilter.h>
 #include <Jolt/Physics/Character/Character.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
+#include <Jolt/Physics/Vehicle/VehicleConstraint.h>
+#include <Jolt/Physics/Vehicle/VehicleCollisionTester.h>
+#include <Jolt/Physics/Vehicle/WheeledVehicleController.h>
+#include <Jolt/Physics/Vehicle/Wheel.h>
 
 #if JPC_DEBUG_RENDERER == 1
 #include <string_view>
@@ -425,6 +429,52 @@ FN(toJph)(const JPC_CharacterVirtualSettings *in) { assert(in); return reinterpr
 FN(toJph)(JPC_CharacterVirtualSettings *in) { assert(in); return reinterpret_cast<JPH::CharacterVirtualSettings *>(in); }
 FN(toJpc)(const JPH::CharacterVirtualSettings *in) { assert(in); return reinterpret_cast<const JPC_CharacterVirtualSettings *>(in); }
 FN(toJpc)(JPH::CharacterVirtualSettings *in) { assert(in); return reinterpret_cast<JPC_CharacterVirtualSettings *>(in); }
+
+// Vehicle types
+FN(toJph)(const JPC_VehicleConstraintSettings *in) { assert(in); return reinterpret_cast<const JPH::VehicleConstraintSettings *>(in); }
+FN(toJph)(JPC_VehicleConstraintSettings *in) { assert(in); return reinterpret_cast<JPH::VehicleConstraintSettings *>(in); }
+FN(toJpc)(const JPH::VehicleConstraintSettings *in) { assert(in); return reinterpret_cast<const JPC_VehicleConstraintSettings *>(in); }
+FN(toJpc)(JPH::VehicleConstraintSettings *in) { assert(in); return reinterpret_cast<JPC_VehicleConstraintSettings *>(in); }
+
+FN(toJph)(const JPC_VehicleConstraint *in) { assert(in); return reinterpret_cast<const JPH::VehicleConstraint *>(in); }
+FN(toJph)(JPC_VehicleConstraint *in) { assert(in); return reinterpret_cast<JPH::VehicleConstraint *>(in); }
+FN(toJpc)(const JPH::VehicleConstraint *in) { assert(in); return reinterpret_cast<const JPC_VehicleConstraint *>(in); }
+FN(toJpc)(JPH::VehicleConstraint *in) { assert(in); return reinterpret_cast<JPC_VehicleConstraint *>(in); }
+
+FN(toJph)(const JPC_WheelSettings *in) { assert(in); return reinterpret_cast<const JPH::WheelSettings *>(in); }
+FN(toJph)(JPC_WheelSettings *in) { assert(in); return reinterpret_cast<JPH::WheelSettings *>(in); }
+FN(toJpc)(const JPH::WheelSettings *in) { assert(in); return reinterpret_cast<const JPC_WheelSettings *>(in); }
+FN(toJpc)(JPH::WheelSettings *in) { assert(in); return reinterpret_cast<JPC_WheelSettings *>(in); }
+
+FN(toJph)(const JPC_WheelSettingsWV *in) { assert(in); return reinterpret_cast<const JPH::WheelSettingsWV *>(in); }
+FN(toJph)(JPC_WheelSettingsWV *in) { assert(in); return reinterpret_cast<JPH::WheelSettingsWV *>(in); }
+FN(toJpc)(const JPH::WheelSettingsWV *in) { assert(in); return reinterpret_cast<const JPC_WheelSettingsWV *>(in); }
+FN(toJpc)(JPH::WheelSettingsWV *in) { assert(in); return reinterpret_cast<JPC_WheelSettingsWV *>(in); }
+
+FN(toJph)(const JPC_Wheel *in) { assert(in); return reinterpret_cast<const JPH::Wheel *>(in); }
+FN(toJph)(JPC_Wheel *in) { assert(in); return reinterpret_cast<JPH::Wheel *>(in); }
+FN(toJpc)(const JPH::Wheel *in) { assert(in); return reinterpret_cast<const JPC_Wheel *>(in); }
+FN(toJpc)(JPH::Wheel *in) { assert(in); return reinterpret_cast<JPC_Wheel *>(in); }
+
+FN(toJph)(const JPC_WheeledVehicleControllerSettings *in) { assert(in); return reinterpret_cast<const JPH::WheeledVehicleControllerSettings *>(in); }
+FN(toJph)(JPC_WheeledVehicleControllerSettings *in) { assert(in); return reinterpret_cast<JPH::WheeledVehicleControllerSettings *>(in); }
+FN(toJpc)(const JPH::WheeledVehicleControllerSettings *in) { assert(in); return reinterpret_cast<const JPC_WheeledVehicleControllerSettings *>(in); }
+FN(toJpc)(JPH::WheeledVehicleControllerSettings *in) { assert(in); return reinterpret_cast<JPC_WheeledVehicleControllerSettings *>(in); }
+
+FN(toJph)(const JPC_WheeledVehicleController *in) { assert(in); return reinterpret_cast<const JPH::WheeledVehicleController *>(in); }
+FN(toJph)(JPC_WheeledVehicleController *in) { assert(in); return reinterpret_cast<JPH::WheeledVehicleController *>(in); }
+FN(toJpc)(const JPH::WheeledVehicleController *in) { assert(in); return reinterpret_cast<const JPC_WheeledVehicleController *>(in); }
+FN(toJpc)(JPH::WheeledVehicleController *in) { assert(in); return reinterpret_cast<JPC_WheeledVehicleController *>(in); }
+
+FN(toJph)(const JPC_VehicleCollisionTester *in) { assert(in); return reinterpret_cast<const JPH::VehicleCollisionTester *>(in); }
+FN(toJph)(JPC_VehicleCollisionTester *in) { assert(in); return reinterpret_cast<JPH::VehicleCollisionTester *>(in); }
+FN(toJpc)(const JPH::VehicleCollisionTester *in) { assert(in); return reinterpret_cast<const JPC_VehicleCollisionTester *>(in); }
+FN(toJpc)(JPH::VehicleCollisionTester *in) { assert(in); return reinterpret_cast<JPC_VehicleCollisionTester *>(in); }
+
+FN(toJph)(const JPC_VehicleControllerSettings *in) { assert(in); return reinterpret_cast<const JPH::VehicleControllerSettings *>(in); }
+FN(toJph)(JPC_VehicleControllerSettings *in) { assert(in); return reinterpret_cast<JPH::VehicleControllerSettings *>(in); }
+FN(toJpc)(const JPH::VehicleControllerSettings *in) { assert(in); return reinterpret_cast<const JPC_VehicleControllerSettings *>(in); }
+FN(toJpc)(JPH::VehicleControllerSettings *in) { assert(in); return reinterpret_cast<JPC_VehicleControllerSettings *>(in); }
 
 FN(toJpc)(const JPH::AABox *in) { assert(in); return reinterpret_cast<const JPC_AABox *>(in); }
 FN(toJph)(const JPC_AABox *in) { assert(in); return reinterpret_cast<const JPH::AABox *>(in); }
@@ -1148,6 +1198,24 @@ JPC_PhysicsSystem_RemoveStepListener(JPC_PhysicsSystem *in_physics_system, void 
 {
     assert(in_listener != nullptr);
     toJph(in_physics_system)->RemoveStepListener(static_cast<JPH::PhysicsStepListener *>(in_listener));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_PhysicsSystem_AddVehicleStepListener(JPC_PhysicsSystem *in_physics_system, JPC_VehicleConstraint *in_vehicle)
+{
+    assert(in_vehicle != nullptr);
+    // VehicleConstraint has multiple inheritance (Constraint, PhysicsStepListener)
+    // C++ handles the pointer adjustment correctly when we have the proper type
+    JPH::VehicleConstraint *vehicle = toJph(in_vehicle);
+    toJph(in_physics_system)->AddStepListener(vehicle);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_PhysicsSystem_RemoveVehicleStepListener(JPC_PhysicsSystem *in_physics_system, JPC_VehicleConstraint *in_vehicle)
+{
+    assert(in_vehicle != nullptr);
+    JPH::VehicleConstraint *vehicle = toJph(in_vehicle);
+    toJph(in_physics_system)->RemoveStepListener(vehicle);
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API void
@@ -3523,5 +3591,539 @@ JPC_API void
 JPC_CharacterVirtual_SetLinearVelocity(JPC_CharacterVirtual *in_character, const float in_linear_velocity[3])
 {
     toJph(in_character)->SetLinearVelocity(loadVec3(in_linear_velocity));
+}
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_WheelSettings
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_WheelSettings *
+JPC_WheelSettings_Create()
+{
+    auto settings = new JPH::WheelSettings();
+    settings->AddRef();
+    return toJpc(settings);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettings_Release(JPC_WheelSettings *in_settings)
+{
+    toJph(in_settings)->Release();
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettings_SetPosition(JPC_WheelSettings *in_settings, const float in_position[3])
+{
+    toJph(in_settings)->mPosition = loadVec3(in_position);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettings_SetSuspensionDirection(JPC_WheelSettings *in_settings, const float in_direction[3])
+{
+    toJph(in_settings)->mSuspensionDirection = loadVec3(in_direction);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettings_SetSteeringAxis(JPC_WheelSettings *in_settings, const float in_axis[3])
+{
+    toJph(in_settings)->mSteeringAxis = loadVec3(in_axis);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettings_SetWheelUp(JPC_WheelSettings *in_settings, const float in_up[3])
+{
+    toJph(in_settings)->mWheelUp = loadVec3(in_up);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettings_SetWheelForward(JPC_WheelSettings *in_settings, const float in_forward[3])
+{
+    toJph(in_settings)->mWheelForward = loadVec3(in_forward);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettings_SetSuspensionMinLength(JPC_WheelSettings *in_settings, float in_length)
+{
+    toJph(in_settings)->mSuspensionMinLength = in_length;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettings_SetSuspensionMaxLength(JPC_WheelSettings *in_settings, float in_length)
+{
+    toJph(in_settings)->mSuspensionMaxLength = in_length;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettings_SetSuspensionPreloadLength(JPC_WheelSettings *in_settings, float in_length)
+{
+    toJph(in_settings)->mSuspensionPreloadLength = in_length;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettings_SetSuspensionSpring(JPC_WheelSettings *in_settings, float in_frequency, float in_damping)
+{
+    toJph(in_settings)->mSuspensionSpring.mFrequency = in_frequency;
+    toJph(in_settings)->mSuspensionSpring.mDamping = in_damping;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettings_SetRadius(JPC_WheelSettings *in_settings, float in_radius)
+{
+    toJph(in_settings)->mRadius = in_radius;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettings_SetWidth(JPC_WheelSettings *in_settings, float in_width)
+{
+    toJph(in_settings)->mWidth = in_width;
+}
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_WheelSettingsWV (-> JPC_WheelSettings)
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_WheelSettingsWV *
+JPC_WheelSettingsWV_Create()
+{
+    auto settings = new JPH::WheelSettingsWV();
+    settings->AddRef();
+    return toJpc(settings);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettingsWV_Release(JPC_WheelSettingsWV *in_settings)
+{
+    toJph(in_settings)->Release();
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_WheelSettings *
+JPC_WheelSettingsWV_AsWheelSettings(JPC_WheelSettingsWV *in_settings)
+{
+    return toJpc(static_cast<JPH::WheelSettings *>(toJph(in_settings)));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettingsWV_SetInertia(JPC_WheelSettingsWV *in_settings, float in_inertia)
+{
+    toJph(in_settings)->mInertia = in_inertia;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettingsWV_SetAngularDamping(JPC_WheelSettingsWV *in_settings, float in_damping)
+{
+    toJph(in_settings)->mAngularDamping = in_damping;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettingsWV_SetMaxSteerAngle(JPC_WheelSettingsWV *in_settings, float in_angle)
+{
+    toJph(in_settings)->mMaxSteerAngle = in_angle;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettingsWV_SetMaxBrakeTorque(JPC_WheelSettingsWV *in_settings, float in_torque)
+{
+    toJph(in_settings)->mMaxBrakeTorque = in_torque;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheelSettingsWV_SetMaxHandBrakeTorque(JPC_WheelSettingsWV *in_settings, float in_torque)
+{
+    toJph(in_settings)->mMaxHandBrakeTorque = in_torque;
+}
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_WheeledVehicleControllerSettings (-> JPC_VehicleControllerSettings)
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_WheeledVehicleControllerSettings *
+JPC_WheeledVehicleControllerSettings_Create()
+{
+    auto settings = new JPH::WheeledVehicleControllerSettings();
+    settings->AddRef();
+    return toJpc(settings);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheeledVehicleControllerSettings_Release(JPC_WheeledVehicleControllerSettings *in_settings)
+{
+    toJph(in_settings)->Release();
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_VehicleControllerSettings *
+JPC_WheeledVehicleControllerSettings_AsVehicleControllerSettings(JPC_WheeledVehicleControllerSettings *in_settings)
+{
+    return toJpc(static_cast<JPH::VehicleControllerSettings *>(toJph(in_settings)));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheeledVehicleControllerSettings_AddDifferential(JPC_WheeledVehicleControllerSettings *in_settings,
+                                                     const JPC_VehicleDifferentialSettings *in_differential)
+{
+    JPH::VehicleDifferentialSettings diff;
+    diff.mLeftWheel = in_differential->left_wheel;
+    diff.mRightWheel = in_differential->right_wheel;
+    diff.mDifferentialRatio = in_differential->differential_ratio;
+    diff.mLeftRightSplit = in_differential->left_right_split;
+    diff.mLimitedSlipRatio = in_differential->limited_slip_ratio;
+    diff.mEngineTorqueRatio = in_differential->engine_torque_ratio;
+    toJph(in_settings)->mDifferentials.push_back(diff);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetEngineMaxTorque(JPC_WheeledVehicleControllerSettings *in_settings, float in_torque)
+{
+    toJph(in_settings)->mEngine.mMaxTorque = in_torque;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetEngineMinRPM(JPC_WheeledVehicleControllerSettings *in_settings, float in_rpm)
+{
+    toJph(in_settings)->mEngine.mMinRPM = in_rpm;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetEngineMaxRPM(JPC_WheeledVehicleControllerSettings *in_settings, float in_rpm)
+{
+    toJph(in_settings)->mEngine.mMaxRPM = in_rpm;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetTransmissionMode(JPC_WheeledVehicleControllerSettings *in_settings,
+                                                         JPC_ETransmissionMode in_mode)
+{
+    toJph(in_settings)->mTransmission.mMode = static_cast<JPH::ETransmissionMode>(in_mode);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetTransmissionGearRatios(JPC_WheeledVehicleControllerSettings *in_settings,
+                                                               const float *in_ratios,
+                                                               uint32_t in_count)
+{
+    toJph(in_settings)->mTransmission.mGearRatios.clear();
+    for (uint32_t i = 0; i < in_count; ++i) {
+        toJph(in_settings)->mTransmission.mGearRatios.push_back(in_ratios[i]);
+    }
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetTransmissionReverseGearRatios(JPC_WheeledVehicleControllerSettings *in_settings,
+                                                                      const float *in_ratios,
+                                                                      uint32_t in_count)
+{
+    toJph(in_settings)->mTransmission.mReverseGearRatios.clear();
+    for (uint32_t i = 0; i < in_count; ++i) {
+        toJph(in_settings)->mTransmission.mReverseGearRatios.push_back(in_ratios[i]);
+    }
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetTransmissionSwitchTime(JPC_WheeledVehicleControllerSettings *in_settings, float in_time)
+{
+    toJph(in_settings)->mTransmission.mSwitchTime = in_time;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetTransmissionClutchStrength(JPC_WheeledVehicleControllerSettings *in_settings, float in_strength)
+{
+    toJph(in_settings)->mTransmission.mClutchStrength = in_strength;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetTransmissionShiftUpRPM(JPC_WheeledVehicleControllerSettings *in_settings, float in_rpm)
+{
+    toJph(in_settings)->mTransmission.mShiftUpRPM = in_rpm;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetTransmissionShiftDownRPM(JPC_WheeledVehicleControllerSettings *in_settings, float in_rpm)
+{
+    toJph(in_settings)->mTransmission.mShiftDownRPM = in_rpm;
+}
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_VehicleCollisionTester
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_VehicleCollisionTester *
+JPC_VehicleCollisionTesterRay_Create(JPC_ObjectLayer in_object_layer, const float in_up[3], float in_max_slope_angle)
+{
+    auto tester = new JPH::VehicleCollisionTesterRay(in_object_layer, loadVec3(in_up), in_max_slope_angle);
+    tester->AddRef();
+    return toJpc(static_cast<JPH::VehicleCollisionTester *>(tester));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_VehicleCollisionTester *
+JPC_VehicleCollisionTesterCastSphere_Create(JPC_ObjectLayer in_object_layer, float in_radius, const float in_up[3], float in_max_slope_angle)
+{
+    auto tester = new JPH::VehicleCollisionTesterCastSphere(in_object_layer, in_radius, loadVec3(in_up), in_max_slope_angle);
+    tester->AddRef();
+    return toJpc(static_cast<JPH::VehicleCollisionTester *>(tester));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_VehicleCollisionTester *
+JPC_VehicleCollisionTesterCastCylinder_Create(JPC_ObjectLayer in_object_layer, float in_convex_radius_fraction)
+{
+    auto tester = new JPH::VehicleCollisionTesterCastCylinder(in_object_layer, in_convex_radius_fraction);
+    tester->AddRef();
+    return toJpc(static_cast<JPH::VehicleCollisionTester *>(tester));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_VehicleCollisionTester_AddRef(JPC_VehicleCollisionTester *in_tester)
+{
+    toJph(in_tester)->AddRef();
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_VehicleCollisionTester_Release(JPC_VehicleCollisionTester *in_tester)
+{
+    toJph(in_tester)->Release();
+}
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_VehicleConstraintSettings (-> JPC_ConstraintSettings)
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_VehicleConstraintSettings *
+JPC_VehicleConstraintSettings_Create()
+{
+    auto settings = new JPH::VehicleConstraintSettings();
+    settings->AddRef();
+    return toJpc(settings);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_VehicleConstraintSettings_Release(JPC_VehicleConstraintSettings *in_settings)
+{
+    toJph(in_settings)->Release();
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_ConstraintSettings *
+JPC_VehicleConstraintSettings_AsConstraintSettings(JPC_VehicleConstraintSettings *in_settings)
+{
+    return toJpc(static_cast<JPH::ConstraintSettings *>(toJph(in_settings)));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_VehicleConstraintSettings_SetUp(JPC_VehicleConstraintSettings *in_settings, const float in_up[3])
+{
+    toJph(in_settings)->mUp = loadVec3(in_up);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_VehicleConstraintSettings_SetForward(JPC_VehicleConstraintSettings *in_settings, const float in_forward[3])
+{
+    toJph(in_settings)->mForward = loadVec3(in_forward);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_VehicleConstraintSettings_SetMaxPitchRollAngle(JPC_VehicleConstraintSettings *in_settings, float in_angle)
+{
+    toJph(in_settings)->mMaxPitchRollAngle = in_angle;
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_VehicleConstraintSettings_AddWheel(JPC_VehicleConstraintSettings *in_settings, JPC_WheelSettings *in_wheel)
+{
+    toJph(in_settings)->mWheels.push_back(toJph(in_wheel));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_VehicleConstraintSettings_AddAntiRollBar(JPC_VehicleConstraintSettings *in_settings,
+                                             const JPC_VehicleAntiRollBarSettings *in_anti_roll_bar)
+{
+    JPH::VehicleAntiRollBar arb;
+    arb.mLeftWheel = in_anti_roll_bar->left_wheel;
+    arb.mRightWheel = in_anti_roll_bar->right_wheel;
+    arb.mStiffness = in_anti_roll_bar->stiffness;
+    toJph(in_settings)->mAntiRollBars.push_back(arb);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_VehicleConstraintSettings_SetController(JPC_VehicleConstraintSettings *in_settings,
+                                            JPC_VehicleControllerSettings *in_controller)
+{
+    toJph(in_settings)->mController = toJph(in_controller);
+}
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_VehicleConstraint (-> JPC_Constraint)
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_VehicleConstraint *
+JPC_VehicleConstraint_Create(JPC_Body *in_body, const JPC_VehicleConstraintSettings *in_settings)
+{
+    auto constraint = new JPH::VehicleConstraint(*toJph(in_body), *toJph(in_settings));
+    constraint->AddRef();
+    return toJpc(constraint);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_Constraint *
+JPC_VehicleConstraint_AsConstraint(JPC_VehicleConstraint *in_constraint)
+{
+    return toJpc(static_cast<JPH::Constraint *>(toJph(in_constraint)));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_VehicleConstraint_SetVehicleCollisionTester(JPC_VehicleConstraint *in_constraint,
+                                                JPC_VehicleCollisionTester *in_tester)
+{
+    toJph(in_constraint)->SetVehicleCollisionTester(toJph(in_tester));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API uint32_t
+JPC_VehicleConstraint_GetNumWheels(const JPC_VehicleConstraint *in_constraint)
+{
+    return static_cast<uint32_t>(toJph(in_constraint)->GetWheels().size());
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_Wheel *
+JPC_VehicleConstraint_GetWheel(JPC_VehicleConstraint *in_constraint, uint32_t in_index)
+{
+    return toJpc(toJph(in_constraint)->GetWheels()[in_index]);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_VehicleConstraint_GetWheelLocalTransform(const JPC_VehicleConstraint *in_constraint,
+                                             uint32_t in_wheel_index,
+                                             const float in_wheel_right[3],
+                                             const float in_wheel_up[3],
+                                             float out_position[3],
+                                             float out_rotation[4])
+{
+    JPH::RMat44 transform = toJph(in_constraint)->GetWheelLocalTransform(
+        in_wheel_index,
+        loadVec3(in_wheel_right),
+        loadVec3(in_wheel_up)
+    );
+    storeVec3(out_position, transform.GetTranslation());
+    storeVec4(out_rotation, transform.GetQuaternion().GetXYZW());
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_VehicleConstraint_GetWheelWorldTransform(const JPC_VehicleConstraint *in_constraint,
+                                             uint32_t in_wheel_index,
+                                             const float in_wheel_right[3],
+                                             const float in_wheel_up[3],
+                                             float out_position[3],
+                                             float out_rotation[4])
+{
+    JPH::RMat44 transform = toJph(in_constraint)->GetWheelWorldTransform(
+        in_wheel_index,
+        loadVec3(in_wheel_right),
+        loadVec3(in_wheel_up)
+    );
+    storeVec3(out_position, transform.GetTranslation());
+    storeVec4(out_rotation, transform.GetQuaternion().GetXYZW());
+}
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_WheeledVehicleController
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_WheeledVehicleController *
+JPC_VehicleConstraint_GetController(JPC_VehicleConstraint *in_constraint)
+{
+    JPH::VehicleController *controller = toJph(in_constraint)->GetController();
+    return toJpc(static_cast<JPH::WheeledVehicleController *>(controller));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_WheeledVehicleController_SetDriverInput(JPC_WheeledVehicleController *in_controller,
+                                            float in_forward,
+                                            float in_right,
+                                            float in_brake,
+                                            float in_hand_brake)
+{
+    toJph(in_controller)->SetDriverInput(in_forward, in_right, in_brake, in_hand_brake);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API float
+JPC_WheeledVehicleController_GetEngineRotationSpeed(const JPC_WheeledVehicleController *in_controller)
+{
+    return toJph(in_controller)->GetEngine().GetCurrentRPM();
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API int32_t
+JPC_WheeledVehicleController_GetTransmissionCurrentGear(const JPC_WheeledVehicleController *in_controller)
+{
+    return toJph(in_controller)->GetTransmission().GetCurrentGear();
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API float
+JPC_WheeledVehicleController_GetTransmissionClutchFriction(const JPC_WheeledVehicleController *in_controller)
+{
+    return toJph(in_controller)->GetTransmission().GetClutchFriction();
+}
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_Wheel
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API bool
+JPC_Wheel_HasContact(const JPC_Wheel *in_wheel)
+{
+    return toJph(in_wheel)->HasContact();
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_BodyID
+JPC_Wheel_GetContactBodyID(const JPC_Wheel *in_wheel)
+{
+    return toJpc(toJph(in_wheel)->GetContactBodyID());
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_Wheel_GetContactPosition(const JPC_Wheel *in_wheel, float out_position[3])
+{
+    storeRVec3(out_position, toJph(in_wheel)->GetContactPosition());
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_Wheel_GetContactNormal(const JPC_Wheel *in_wheel, float out_normal[3])
+{
+    storeVec3(out_normal, toJph(in_wheel)->GetContactNormal());
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API float
+JPC_Wheel_GetSuspensionLength(const JPC_Wheel *in_wheel)
+{
+    return toJph(in_wheel)->GetSuspensionLength();
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API float
+JPC_Wheel_GetAngularVelocity(const JPC_Wheel *in_wheel)
+{
+    return toJph(in_wheel)->GetAngularVelocity();
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_Wheel_SetAngularVelocity(JPC_Wheel *in_wheel, float in_velocity)
+{
+    toJph(in_wheel)->SetAngularVelocity(in_velocity);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API float
+JPC_Wheel_GetRotationAngle(const JPC_Wheel *in_wheel)
+{
+    return toJph(in_wheel)->GetRotationAngle();
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_Wheel_SetRotationAngle(JPC_Wheel *in_wheel, float in_angle)
+{
+    toJph(in_wheel)->SetRotationAngle(in_angle);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API float
+JPC_Wheel_GetSteerAngle(const JPC_Wheel *in_wheel)
+{
+    return toJph(in_wheel)->GetSteerAngle();
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_Wheel_SetSteerAngle(JPC_Wheel *in_wheel, float in_angle)
+{
+    toJph(in_wheel)->SetSteerAngle(in_angle);
 }
 //--------------------------------------------------------------------------------------------------

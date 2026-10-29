@@ -373,6 +373,19 @@ typedef struct JPC_GroupFilter      JPC_GroupFilter;
 typedef struct JPC_Character        JPC_Character;
 typedef struct JPC_CharacterVirtual JPC_CharacterVirtual;
 
+// Vehicle types
+typedef struct JPC_VehicleConstraintSettings        JPC_VehicleConstraintSettings;
+typedef struct JPC_VehicleConstraint                JPC_VehicleConstraint;
+typedef struct JPC_VehicleControllerSettings        JPC_VehicleControllerSettings;
+typedef struct JPC_VehicleController                JPC_VehicleController;
+typedef struct JPC_WheeledVehicleControllerSettings JPC_WheeledVehicleControllerSettings;
+typedef struct JPC_WheeledVehicleController         JPC_WheeledVehicleController;
+typedef struct JPC_WheelSettings                    JPC_WheelSettings;
+typedef struct JPC_WheelSettingsWV                  JPC_WheelSettingsWV;
+typedef struct JPC_Wheel                            JPC_Wheel;
+typedef struct JPC_WheelWV                          JPC_WheelWV;
+typedef struct JPC_VehicleCollisionTester           JPC_VehicleCollisionTester;
+
 #if JPC_DEBUG_RENDERER == 1
 typedef struct JPC_BodyDrawFilter              JPC_BodyDrawFilter;
 typedef struct JPC_DebugRenderer_TriangleBatch JPC_DebugRenderer_TriangleBatch;
@@ -1376,6 +1389,13 @@ JPC_PhysicsSystem_AddStepListener(JPC_PhysicsSystem *in_physics_system, void *in
 
 JPC_API void
 JPC_PhysicsSystem_RemoveStepListener(JPC_PhysicsSystem *in_physics_system, void *in_listener);
+
+// Vehicle-specific step listener functions (handles multiple inheritance correctly)
+JPC_API void
+JPC_PhysicsSystem_AddVehicleStepListener(JPC_PhysicsSystem *in_physics_system, JPC_VehicleConstraint *in_vehicle);
+
+JPC_API void
+JPC_PhysicsSystem_RemoveVehicleStepListener(JPC_PhysicsSystem *in_physics_system, JPC_VehicleConstraint *in_vehicle);
 
 JPC_API void
 JPC_PhysicsSystem_AddConstraint(JPC_PhysicsSystem *in_physics_system, JPC_Constraint *in_constraint);
@@ -2497,6 +2517,304 @@ JPC_CharacterVirtual_GetLinearVelocity(const JPC_CharacterVirtual *in_character,
 
 JPC_API void
 JPC_CharacterVirtual_SetLinearVelocity(JPC_CharacterVirtual *in_character, const float in_linear_velocity[3]);
+//--------------------------------------------------------------------------------------------------
+//
+// Vehicle Structures
+//
+//--------------------------------------------------------------------------------------------------
+typedef struct JPC_VehicleAntiRollBarSettings {
+    int32_t left_wheel;
+    int32_t right_wheel;
+    float   stiffness;
+} JPC_VehicleAntiRollBarSettings;
+
+typedef struct JPC_VehicleDifferentialSettings {
+    int32_t left_wheel;
+    int32_t right_wheel;
+    float   differential_ratio;
+    float   left_right_split;
+    float   limited_slip_ratio;
+    float   engine_torque_ratio;
+} JPC_VehicleDifferentialSettings;
+
+typedef enum JPC_ETransmissionMode {
+    JPC_TRANSMISSION_AUTO   = 0,
+    JPC_TRANSMISSION_MANUAL = 1,
+    _JPC_TRANSMISSION_FORCEU32 = 0x7fffffff
+} JPC_ETransmissionMode;
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_WheelSettings
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_WheelSettings *
+JPC_WheelSettings_Create();
+
+JPC_API void
+JPC_WheelSettings_Release(JPC_WheelSettings *in_settings);
+
+JPC_API void
+JPC_WheelSettings_SetPosition(JPC_WheelSettings *in_settings, const float in_position[3]);
+
+JPC_API void
+JPC_WheelSettings_SetSuspensionDirection(JPC_WheelSettings *in_settings, const float in_direction[3]);
+
+JPC_API void
+JPC_WheelSettings_SetSteeringAxis(JPC_WheelSettings *in_settings, const float in_axis[3]);
+
+JPC_API void
+JPC_WheelSettings_SetWheelUp(JPC_WheelSettings *in_settings, const float in_up[3]);
+
+JPC_API void
+JPC_WheelSettings_SetWheelForward(JPC_WheelSettings *in_settings, const float in_forward[3]);
+
+JPC_API void
+JPC_WheelSettings_SetSuspensionMinLength(JPC_WheelSettings *in_settings, float in_length);
+
+JPC_API void
+JPC_WheelSettings_SetSuspensionMaxLength(JPC_WheelSettings *in_settings, float in_length);
+
+JPC_API void
+JPC_WheelSettings_SetSuspensionPreloadLength(JPC_WheelSettings *in_settings, float in_length);
+
+JPC_API void
+JPC_WheelSettings_SetSuspensionSpring(JPC_WheelSettings *in_settings, float in_frequency, float in_damping);
+
+JPC_API void
+JPC_WheelSettings_SetRadius(JPC_WheelSettings *in_settings, float in_radius);
+
+JPC_API void
+JPC_WheelSettings_SetWidth(JPC_WheelSettings *in_settings, float in_width);
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_WheelSettingsWV (-> JPC_WheelSettings)
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_WheelSettingsWV *
+JPC_WheelSettingsWV_Create();
+
+JPC_API void
+JPC_WheelSettingsWV_Release(JPC_WheelSettingsWV *in_settings);
+
+JPC_API JPC_WheelSettings *
+JPC_WheelSettingsWV_AsWheelSettings(JPC_WheelSettingsWV *in_settings);
+
+JPC_API void
+JPC_WheelSettingsWV_SetInertia(JPC_WheelSettingsWV *in_settings, float in_inertia);
+
+JPC_API void
+JPC_WheelSettingsWV_SetAngularDamping(JPC_WheelSettingsWV *in_settings, float in_damping);
+
+JPC_API void
+JPC_WheelSettingsWV_SetMaxSteerAngle(JPC_WheelSettingsWV *in_settings, float in_angle);
+
+JPC_API void
+JPC_WheelSettingsWV_SetMaxBrakeTorque(JPC_WheelSettingsWV *in_settings, float in_torque);
+
+JPC_API void
+JPC_WheelSettingsWV_SetMaxHandBrakeTorque(JPC_WheelSettingsWV *in_settings, float in_torque);
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_WheeledVehicleControllerSettings (-> JPC_VehicleControllerSettings)
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_WheeledVehicleControllerSettings *
+JPC_WheeledVehicleControllerSettings_Create();
+
+JPC_API void
+JPC_WheeledVehicleControllerSettings_Release(JPC_WheeledVehicleControllerSettings *in_settings);
+
+JPC_API JPC_VehicleControllerSettings *
+JPC_WheeledVehicleControllerSettings_AsVehicleControllerSettings(JPC_WheeledVehicleControllerSettings *in_settings);
+
+JPC_API void
+JPC_WheeledVehicleControllerSettings_AddDifferential(JPC_WheeledVehicleControllerSettings *in_settings,
+                                                     const JPC_VehicleDifferentialSettings *in_differential);
+
+// Engine settings
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetEngineMaxTorque(JPC_WheeledVehicleControllerSettings *in_settings, float in_torque);
+
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetEngineMinRPM(JPC_WheeledVehicleControllerSettings *in_settings, float in_rpm);
+
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetEngineMaxRPM(JPC_WheeledVehicleControllerSettings *in_settings, float in_rpm);
+
+// Transmission settings
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetTransmissionMode(JPC_WheeledVehicleControllerSettings *in_settings,
+                                                         JPC_ETransmissionMode in_mode);
+
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetTransmissionGearRatios(JPC_WheeledVehicleControllerSettings *in_settings,
+                                                               const float *in_ratios,
+                                                               uint32_t in_count);
+
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetTransmissionReverseGearRatios(JPC_WheeledVehicleControllerSettings *in_settings,
+                                                                      const float *in_ratios,
+                                                                      uint32_t in_count);
+
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetTransmissionSwitchTime(JPC_WheeledVehicleControllerSettings *in_settings, float in_time);
+
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetTransmissionClutchStrength(JPC_WheeledVehicleControllerSettings *in_settings, float in_strength);
+
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetTransmissionShiftUpRPM(JPC_WheeledVehicleControllerSettings *in_settings, float in_rpm);
+
+JPC_API void
+JPC_WheeledVehicleControllerSettings_SetTransmissionShiftDownRPM(JPC_WheeledVehicleControllerSettings *in_settings, float in_rpm);
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_VehicleCollisionTester
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_VehicleCollisionTester *
+JPC_VehicleCollisionTesterRay_Create(JPC_ObjectLayer in_object_layer, const float in_up[3], float in_max_slope_angle);
+
+JPC_API JPC_VehicleCollisionTester *
+JPC_VehicleCollisionTesterCastSphere_Create(JPC_ObjectLayer in_object_layer, float in_radius, const float in_up[3], float in_max_slope_angle);
+
+JPC_API JPC_VehicleCollisionTester *
+JPC_VehicleCollisionTesterCastCylinder_Create(JPC_ObjectLayer in_object_layer, float in_convex_radius_fraction);
+
+JPC_API void
+JPC_VehicleCollisionTester_AddRef(JPC_VehicleCollisionTester *in_tester);
+
+JPC_API void
+JPC_VehicleCollisionTester_Release(JPC_VehicleCollisionTester *in_tester);
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_VehicleConstraintSettings (-> JPC_ConstraintSettings)
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_VehicleConstraintSettings *
+JPC_VehicleConstraintSettings_Create();
+
+JPC_API void
+JPC_VehicleConstraintSettings_Release(JPC_VehicleConstraintSettings *in_settings);
+
+JPC_API JPC_ConstraintSettings *
+JPC_VehicleConstraintSettings_AsConstraintSettings(JPC_VehicleConstraintSettings *in_settings);
+
+JPC_API void
+JPC_VehicleConstraintSettings_SetUp(JPC_VehicleConstraintSettings *in_settings, const float in_up[3]);
+
+JPC_API void
+JPC_VehicleConstraintSettings_SetForward(JPC_VehicleConstraintSettings *in_settings, const float in_forward[3]);
+
+JPC_API void
+JPC_VehicleConstraintSettings_SetMaxPitchRollAngle(JPC_VehicleConstraintSettings *in_settings, float in_angle);
+
+JPC_API void
+JPC_VehicleConstraintSettings_AddWheel(JPC_VehicleConstraintSettings *in_settings, JPC_WheelSettings *in_wheel);
+
+JPC_API void
+JPC_VehicleConstraintSettings_AddAntiRollBar(JPC_VehicleConstraintSettings *in_settings,
+                                             const JPC_VehicleAntiRollBarSettings *in_anti_roll_bar);
+
+JPC_API void
+JPC_VehicleConstraintSettings_SetController(JPC_VehicleConstraintSettings *in_settings,
+                                            JPC_VehicleControllerSettings *in_controller);
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_VehicleConstraint (-> JPC_Constraint)
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_VehicleConstraint *
+JPC_VehicleConstraint_Create(JPC_Body *in_body, const JPC_VehicleConstraintSettings *in_settings);
+
+JPC_API JPC_Constraint *
+JPC_VehicleConstraint_AsConstraint(JPC_VehicleConstraint *in_constraint);
+
+JPC_API void
+JPC_VehicleConstraint_SetVehicleCollisionTester(JPC_VehicleConstraint *in_constraint,
+                                                JPC_VehicleCollisionTester *in_tester);
+
+JPC_API uint32_t
+JPC_VehicleConstraint_GetNumWheels(const JPC_VehicleConstraint *in_constraint);
+
+JPC_API JPC_Wheel *
+JPC_VehicleConstraint_GetWheel(JPC_VehicleConstraint *in_constraint, uint32_t in_index);
+
+JPC_API void
+JPC_VehicleConstraint_GetWheelLocalTransform(const JPC_VehicleConstraint *in_constraint,
+                                             uint32_t in_wheel_index,
+                                             const float in_wheel_right[3],
+                                             const float in_wheel_up[3],
+                                             float out_position[3],
+                                             float out_rotation[4]);
+
+JPC_API void
+JPC_VehicleConstraint_GetWheelWorldTransform(const JPC_VehicleConstraint *in_constraint,
+                                             uint32_t in_wheel_index,
+                                             const float in_wheel_right[3],
+                                             const float in_wheel_up[3],
+                                             float out_position[3],
+                                             float out_rotation[4]);
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_WheeledVehicleController
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API JPC_WheeledVehicleController *
+JPC_VehicleConstraint_GetController(JPC_VehicleConstraint *in_constraint);
+
+JPC_API void
+JPC_WheeledVehicleController_SetDriverInput(JPC_WheeledVehicleController *in_controller,
+                                            float in_forward,
+                                            float in_right,
+                                            float in_brake,
+                                            float in_hand_brake);
+
+JPC_API float
+JPC_WheeledVehicleController_GetEngineRotationSpeed(const JPC_WheeledVehicleController *in_controller);
+
+JPC_API int32_t
+JPC_WheeledVehicleController_GetTransmissionCurrentGear(const JPC_WheeledVehicleController *in_controller);
+
+JPC_API float
+JPC_WheeledVehicleController_GetTransmissionClutchFriction(const JPC_WheeledVehicleController *in_controller);
+//--------------------------------------------------------------------------------------------------
+//
+// JPC_Wheel
+//
+//--------------------------------------------------------------------------------------------------
+JPC_API bool
+JPC_Wheel_HasContact(const JPC_Wheel *in_wheel);
+
+JPC_API JPC_BodyID
+JPC_Wheel_GetContactBodyID(const JPC_Wheel *in_wheel);
+
+JPC_API void
+JPC_Wheel_GetContactPosition(const JPC_Wheel *in_wheel, float out_position[3]);
+
+JPC_API void
+JPC_Wheel_GetContactNormal(const JPC_Wheel *in_wheel, float out_normal[3]);
+
+JPC_API float
+JPC_Wheel_GetSuspensionLength(const JPC_Wheel *in_wheel);
+
+JPC_API float
+JPC_Wheel_GetAngularVelocity(const JPC_Wheel *in_wheel);
+
+JPC_API void
+JPC_Wheel_SetAngularVelocity(JPC_Wheel *in_wheel, float in_velocity);
+
+JPC_API float
+JPC_Wheel_GetRotationAngle(const JPC_Wheel *in_wheel);
+
+JPC_API void
+JPC_Wheel_SetRotationAngle(JPC_Wheel *in_wheel, float in_angle);
+
+JPC_API float
+JPC_Wheel_GetSteerAngle(const JPC_Wheel *in_wheel);
+
+JPC_API void
+JPC_Wheel_SetSteerAngle(JPC_Wheel *in_wheel, float in_angle);
 //--------------------------------------------------------------------------------------------------
 #ifdef __cplusplus
 }
